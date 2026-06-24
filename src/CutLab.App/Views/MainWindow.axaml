@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CutLab.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="640"
+        x:Class="CutLab.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="CutLab"
+        Width="960" Height="640">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*" Margin="24">
+        <StackPanel Grid.Row="0" Spacing="8">
+            <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="Bold"/>
+            <TextBlock Text="{Binding Subtitle}" Opacity="0.7"/>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Margin="0,24,0,0"
+                Padding="16"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource ThemeBorderLowBrush}">
+            <TextBlock Text="MVP 功能开发中：卡号规则 · 批量重命名 · 缺卡检测 · 自动归档"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"/>
+        </Border>
+    </Grid>
+</Window>

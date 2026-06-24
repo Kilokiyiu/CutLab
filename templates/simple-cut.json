@@ -1,0 +1,24 @@
+{
+  "name": "simple-cut",
+  "description": "简单 C001 命名模板",
+  "namingRule": {
+    "template": "C{CUT:03}_{TYPE}",
+    "separator": "_",
+    "typeSuffixes": {
+      "storyboard": "分镜",
+      "keyframe": "原画",
+      "inbetween": "动画",
+      "background": "背景",
+      "render": "渲染"
+    }
+  },
+  "archiveTemplate": {
+    "pathPattern": "C{CUT:03}/{TYPE}/",
+    "folders": ["分镜", "原画", "动画", "背景", "渲染"]
+  },
+  "recognitionPatterns": [
+    "{N}卡{TYPE}",
+    "C{CUT:03}_{TYPE}",
+    "第{N}卡"
+  ]
+}

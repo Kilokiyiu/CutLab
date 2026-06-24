@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CutLab.App/CutLab.App.csproj" />
+    <Project Path="src/CutLab.Application/CutLab.Application.csproj" />
+    <Project Path="src/CutLab.Domain/CutLab.Domain.csproj" />
+    <Project Path="src/CutLab.Infrastructure/CutLab.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CutLab.Application.Tests/CutLab.Application.Tests.csproj" />
+    <Project Path="tests/CutLab.Domain.Tests/CutLab.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
