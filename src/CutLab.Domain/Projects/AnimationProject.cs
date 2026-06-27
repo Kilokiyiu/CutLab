@@ -99,6 +99,19 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         return Result.Success();
     }
 
+    public Result UpdateInfo(string name, EpisodeNumber episode)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Result.Failure("项目名称不能为空。");
+        }
+
+        Name = name.Trim();
+        Episode = episode;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Success();
+    }
+
     public Result UpdateArchiveTemplate(ArchiveTemplate template)
     {
         ArchiveTemplate = template;

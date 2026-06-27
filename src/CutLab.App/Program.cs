@@ -1,5 +1,5 @@
-﻿using System;
-using Avalonia;
+﻿using Avalonia;
+using CutLab.App.Services;
 using CutLab.App.ViewModels;
 using CutLab.Application;
 using CutLab.Infrastructure;
@@ -34,7 +34,10 @@ sealed class Program
         var services = new ServiceCollection();
         services.AddApplication();
         services.AddInfrastructure();
+        services.AddSingleton<IFileDialogService, FileDialogService>();
+        services.AddSingleton<IWindowService, WindowService>();
         services.AddTransient<MainWindowViewModel>();
+        services.AddTransient<ProjectSettingsViewModel>();
         return services.BuildServiceProvider();
     }
 }

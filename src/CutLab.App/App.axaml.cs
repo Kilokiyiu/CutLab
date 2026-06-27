@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using CutLab.App.Services;
 using CutLab.App.ViewModels;
 using CutLab.App.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,10 +19,14 @@ public partial class App : global::Avalonia.Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = Program.Services.GetRequiredService<MainWindowViewModel>(),
             };
+
+            Program.Services.GetRequiredService<IFileDialogService>().SetOwner(mainWindow);
+            Program.Services.GetRequiredService<IWindowService>().SetOwner(mainWindow);
+            desktop.MainWindow = mainWindow;
         }
 
         base.OnFrameworkInitializationCompleted();

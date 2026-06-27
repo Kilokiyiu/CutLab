@@ -1,33 +1,22 @@
 # CutLab 开发进度
 
-## 2026-06-24
+## 2026-06-25（续 2）
 
 ### 完成
 
-- [x] 产品规划文档 `docs/PROJECT_PLAN.md`
-- [x] DDD 架构设计 `docs/ARCHITECTURE.md`
-- [x] 解决方案骨架搭建（C# + Avalonia + DDD 四层）
-- [x] 领域层：4 个核心聚合占位
-  - `AnimationProject` / `CutRegistry` / `ScanSession` / `OperationBatch`
-- [x] 应用层：3 个 Handler
-  - `CreateProject` / `ScanFolder` / `GetMissingCuts`
-- [x] 基础设施层
-  - `JsonProjectRepository`（项目 JSON 持久化）
-  - `RegexRecognitionService`（`1卡原画` / `EP01_S02_C001_原画` 识别）
-  - `TemplateNamingService`（命名模板渲染）
-  - `LocalFileSystemGateway`（文件扫描，重命名/撤销待实现）
-- [x] Avalonia 桌面壳 + DI 配置
-- [x] 默认模板 `templates/tv-anime-standard.json` / `simple-cut.json`
-- [x] 单元测试 2 个（缺卡检测、命名模板）
-- [x] `dotnet build` / `dotnet test` 通过
+- [x] **项目设置界面** — `ProjectSettingsWindow` 编辑命名/归档规则
+- [x] `GetProjectHandler` / `UpdateProjectSettingsHandler`
+- [x] **卡号清单导出 Excel** — `ExportCutListHandler` + MiniExcel
+- [x] **递归扫描** — 「含子目录」复选框
+- [x] `IFileDialogService` — 文件夹选择 + Excel 保存对话框
+- [x] `docs/NAMING_RULE_SPEC.md` — 模板语法说明
+- [x] 单元测试 11 个（Application 层）
 
-### 明天继续
+### 下一步
 
-- [ ] `ExecuteRenameCommand` — 批量重命名 + dry-run + undo
-- [ ] `ExecuteArchiveCommand` — 自动建目录 / 移动文件
-- [ ] UI 工作流 — 项目设置 → 扫描预览 → 执行
-- [ ] 补测试 — `RegexRecognitionService` 多模式识别
-- [ ] `NAMING_RULE_SPEC.md` — 模板语法说明
+- [ ] 插卡重编号（C003b）
+- [ ] 版本标签（v1 / draft / s）
+- [ ] 批量预览合成（FFmpeg）
 
 ### 验证命令
 
@@ -37,3 +26,17 @@ dotnet build
 dotnet test
 dotnet run --project src/CutLab.App
 ```
+
+---
+
+## 2026-06-25（续）
+
+- [x] 自动归档、缺卡检测 UI、文件夹浏览
+
+## 2026-06-25
+
+- [x] 批量重命名 + 撤销 + 扫描预览
+
+## 2026-06-24
+
+- [x] 项目骨架 + DDD 架构 + Git 首次提交

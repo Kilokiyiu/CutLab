@@ -44,9 +44,8 @@ dotnet run --project src/CutLab.App
 - [x] 应用层 Handler：`CreateProject` / `ScanFolder` / `GetMissingCuts`
 - [x] 基础设施：`JsonProjectRepository` / `RegexRecognitionService` / `TemplateNamingService`
 - [x] Avalonia 主窗口 + DI 配置
-- [ ] 批量重命名执行与撤销
-- [ ] 自动归档
-- [ ] 完整 UI 工作流
+- [x] 项目设置 / Excel 导出 / 递归扫描
+- [ ] 插卡重编号、版本标签
 
 ## 文档
 

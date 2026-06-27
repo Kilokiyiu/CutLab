@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using CutLab.Domain.Services;
 using CutLab.Domain.ValueObjects;
 
-internal sealed partial class RegexRecognitionService : IRecognitionService
+public sealed partial class RegexRecognitionService : IRecognitionService
 {
     public RecognitionResult TryParse(
         string fileName,
@@ -12,13 +12,6 @@ internal sealed partial class RegexRecognitionService : IRecognitionService
         NamingConvention defaultConvention)
     {
         var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
-
-        if (ChineseCardPattern().Match(nameWithoutExtension) is { Success: true } chineseMatch)
-        {
-            var cut = int.Parse(chineseMatch.Groups["cut"].Value);
-            var typeText = chineseMatch.Groups["type"].Value;
-            return BuildResult(1, 1, cut, typeText);
-        }
 
         if (StandardCutPattern().Match(nameWithoutExtension) is { Success: true } standardMatch)
         {
@@ -29,7 +22,53 @@ internal sealed partial class RegexRecognitionService : IRecognitionService
             return BuildResult(episode, scene, cut, typeText);
         }
 
+        if (SimpleCutPattern().Match(nameWithoutExtension) is { Success: true } simpleMatch)
+        {
+            var cut = int.Parse(simpleMatch.Groups["cut"].Value);
+            var typeText = simpleMatch.Groups["type"].Value;
+            return BuildResult(defaultConvention, cut, typeText);
+        }
+
+        if (ChineseCardPattern().Match(nameWithoutExtension) is { Success: true } chineseMatch)
+        {
+            var cut = int.Parse(chineseMatch.Groups["cut"].Value);
+            var typeText = chineseMatch.Groups["type"].Value;
+            return BuildResult(defaultConvention, cut, typeText);
+        }
+
+        if (OrdinalCardPattern().Match(nameWithoutExtension) is { Success: true } ordinalMatch)
+        {
+            var cut = int.Parse(ordinalMatch.Groups["cut"].Value);
+            return new RecognitionResult(
+                new CutNumber(1, 1, cut),
+                null,
+                RecognitionStatus.Unrecognized,
+                "已识别卡号，但缺少资产类型。");
+        }
+
         return new RecognitionResult(null, null, RecognitionStatus.Unrecognized, "未匹配任何识别规则。");
+    }
+
+    private static RecognitionResult BuildResult(
+        NamingConvention convention,
+        int cut,
+        string typeText)
+    {
+        var episode = ExtractEpisode(convention);
+        var scene = ExtractScene(convention);
+        return BuildResult(episode, scene, cut, typeText);
+    }
+
+    private static int ExtractEpisode(NamingConvention convention)
+    {
+        var match = EpisodeTokenPattern().Match(convention.Template);
+        return match.Success ? int.Parse(match.Groups["value"].Value) : 1;
+    }
+
+    private static int ExtractScene(NamingConvention convention)
+    {
+        var match = SceneTokenPattern().Match(convention.Template);
+        return match.Success ? int.Parse(match.Groups["value"].Value) : 1;
     }
 
     private static RecognitionResult BuildResult(int episode, int scene, int cut, string typeText)
@@ -62,9 +101,21 @@ internal sealed partial class RegexRecognitionService : IRecognitionService
             _ => null
         };
 
+    [GeneratedRegex(@"^EP(?<ep>\d+)_S(?<sc>\d+)_C(?<cut>\d+)_(?<type>分镜|原画|动画|背景|渲染)$", RegexOptions.IgnoreCase)]
+    private static partial Regex StandardCutPattern();
+
+    [GeneratedRegex(@"^C(?<cut>\d+)_(?<type>分镜|原画|动画|背景|渲染)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SimpleCutPattern();
+
     [GeneratedRegex(@"^(?<cut>\d+)卡(?<type>分镜|原画|动画|背景|渲染)$")]
     private static partial Regex ChineseCardPattern();
 
-    [GeneratedRegex(@"^EP(?<ep>\d+)_S(?<sc>\d+)_C(?<cut>\d+)_(?<type>分镜|原画|动画|背景|渲染)$", RegexOptions.IgnoreCase)]
-    private static partial Regex StandardCutPattern();
+    [GeneratedRegex(@"^第(?<cut>\d+)卡$")]
+    private static partial Regex OrdinalCardPattern();
+
+    [GeneratedRegex(@"EP(?<value>\d+)")]
+    private static partial Regex EpisodeTokenPattern();
+
+    [GeneratedRegex(@"S(?<value>\d+)")]
+    private static partial Regex SceneTokenPattern();
 }

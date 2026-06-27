@@ -3,34 +3,77 @@
         xmlns:vm="using:CutLab.App.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="640"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
         x:Class="CutLab.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="CutLab"
-        Width="960" Height="640">
+        Width="1180" Height="760">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*" Margin="24">
-        <StackPanel Grid.Row="0" Spacing="8">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="24">
+        <StackPanel Grid.Row="0" Spacing="4">
             <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="Bold"/>
             <TextBlock Text="{Binding Subtitle}" Opacity="0.7"/>
         </StackPanel>
 
-        <Border Grid.Row="1"
-                Margin="0,24,0,0"
-                Padding="16"
-                CornerRadius="8"
-                BorderThickness="1"
-                BorderBrush="{DynamicResource ThemeBorderLowBrush}">
-            <TextBlock Text="MVP 功能开发中：卡号规则 · 批量重命名 · 缺卡检测 · 自动归档"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center"
-                       TextWrapping="Wrap"
-                       TextAlignment="Center"/>
-        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,20,0,8">
+            <TextBox Grid.Column="0"
+                     PlaceholderText="输入或选择待扫描文件夹路径"
+                     Text="{Binding SourcePath}"/>
+            <Button Grid.Column="1"
+                    Margin="8,0,0,0"
+                    Content="浏览..."
+                    Command="{Binding PickFolderCommand}"/>
+            <CheckBox Grid.Column="2"
+                      Margin="8,0,0,0"
+                      Content="含子目录"
+                      VerticalAlignment="Center"
+                      IsChecked="{Binding ScanRecursive}"/>
+            <Button Grid.Column="3"
+                    Margin="8,0,0,0"
+                    Content="扫描"
+                    Command="{Binding ScanCommand}"/>
+        </Grid>
+
+        <WrapPanel Grid.Row="2" Margin="0,0,0,12">
+            <Button Content="项目设置" Margin="0,0,8,8" Command="{Binding OpenSettingsCommand}"/>
+            <Button Content="执行重命名" Margin="0,0,8,8" Command="{Binding ExecuteRenameCommand}"/>
+            <Button Content="创建归档目录" Margin="0,0,8,8" Command="{Binding CreateArchiveDirectoriesCommand}"/>
+            <Button Content="移动到归档" Margin="0,0,8,8" Command="{Binding MoveToArchiveCommand}"/>
+            <Button Content="缺卡检测" Margin="0,0,8,8" Command="{Binding DetectMissingCutsCommand}"/>
+            <Button Content="导出 Excel" Margin="0,0,8,8" Command="{Binding ExportCutListCommand}"/>
+            <Button Content="撤销上次" Margin="0,0,8,8" Command="{Binding UndoCommand}"/>
+        </WrapPanel>
+
+        <DataGrid Grid.Row="3"
+                  ItemsSource="{Binding PreviewItems}"
+                  IsReadOnly="True"
+                  AutoGenerateColumns="False"
+                  CanUserReorderColumns="False"
+                  CanUserResizeColumns="True"
+                  CanUserSortColumns="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="来源" Binding="{Binding Source}" Width="2*"/>
+                <DataGridTextColumn Header="目标" Binding="{Binding Target}" Width="3*"/>
+                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
+                <DataGridTextColumn Header="说明" Binding="{Binding Message}" Width="2*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Grid.Row="4"
+                   Margin="0,12,0,0"
+                   Text="{Binding MissingCutsSummary}"
+                   TextWrapping="Wrap"
+                   FontWeight="SemiBold"/>
+
+        <TextBlock Grid.Row="5"
+                   Margin="0,8,0,0"
+                   Text="{Binding StatusMessage}"
+                   TextWrapping="Wrap"
+                   Opacity="0.85"/>
     </Grid>
 </Window>

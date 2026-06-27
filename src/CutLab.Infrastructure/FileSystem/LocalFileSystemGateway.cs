@@ -40,9 +40,114 @@ internal sealed class LocalFileSystemGateway : IFileSystemGateway
         IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("批量文件操作将在后续迭代实现。");
+        var entries = batch.Entries.ToList();
+        var completed = 0;
+
+        foreach (var entry in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                switch (entry.Kind)
+                {
+                    case OperationKind.Rename:
+                        ApplyRename(entry);
+                        entry.MarkSuccess();
+                        break;
+                    case OperationKind.Move:
+                        ApplyMove(entry);
+                        entry.MarkSuccess();
+                        break;
+                    case OperationKind.CreateDirectory:
+                        Directory.CreateDirectory(entry.TargetPath.Value);
+                        entry.MarkSuccess();
+                        break;
+                    default:
+                        entry.MarkFailed();
+                        break;
+                }
+            }
+            catch
+            {
+                entry.MarkFailed();
+            }
+
+            completed++;
+            progress?.Report(new OperationProgress(completed, entries.Count, entry.SourcePath.Value));
+        }
+
+        return Task.CompletedTask;
     }
 
-    public Task RevertOperationsAsync(OperationBatch batch, CancellationToken cancellationToken = default) =>
-        throw new NotImplementedException("撤销操作将在后续迭代实现。");
+    public Task RevertOperationsAsync(OperationBatch batch, CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in batch.GetSuccessfulEntries().Reverse())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            switch (entry.Kind)
+            {
+                case OperationKind.Rename:
+                case OperationKind.Move:
+                    if (File.Exists(entry.TargetPath.Value))
+                    {
+                        File.Move(entry.TargetPath.Value, entry.SourcePath.Value, overwrite: true);
+                    }
+
+                    break;
+                case OperationKind.CreateDirectory:
+                    if (Directory.Exists(entry.TargetPath.Value))
+                    {
+                        Directory.Delete(entry.TargetPath.Value, recursive: false);
+                    }
+
+                    break;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static void ApplyRename(FileOperationEntry entry)
+    {
+        if (!File.Exists(entry.SourcePath.Value))
+        {
+            throw new FileNotFoundException("源文件不存在。", entry.SourcePath.Value);
+        }
+
+        if (File.Exists(entry.TargetPath.Value))
+        {
+            throw new IOException($"目标文件已存在：{entry.TargetPath.Value}");
+        }
+
+        var targetDirectory = Path.GetDirectoryName(entry.TargetPath.Value);
+        if (!string.IsNullOrWhiteSpace(targetDirectory))
+        {
+            Directory.CreateDirectory(targetDirectory);
+        }
+
+        File.Move(entry.SourcePath.Value, entry.TargetPath.Value);
+    }
+
+    private static void ApplyMove(FileOperationEntry entry)
+    {
+        if (!File.Exists(entry.SourcePath.Value))
+        {
+            throw new FileNotFoundException("源文件不存在。", entry.SourcePath.Value);
+        }
+
+        if (File.Exists(entry.TargetPath.Value))
+        {
+            throw new IOException($"目标文件已存在：{entry.TargetPath.Value}");
+        }
+
+        var targetDirectory = Path.GetDirectoryName(entry.TargetPath.Value);
+        if (!string.IsNullOrWhiteSpace(targetDirectory))
+        {
+            Directory.CreateDirectory(targetDirectory);
+        }
+
+        File.Move(entry.SourcePath.Value, entry.TargetPath.Value);
+    }
 }

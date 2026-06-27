@@ -38,6 +38,8 @@ public interface IArchivePathResolver
 {
     Result<FilePath> ResolveDirectory(
         ArchiveTemplate template,
+        NamingConvention namingConvention,
+        WorkspacePath projectRoot,
         CutNumber cut,
-        AssetType? assetType);
+        AssetType assetType);
 }

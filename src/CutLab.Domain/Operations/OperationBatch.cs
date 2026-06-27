@@ -22,7 +22,9 @@ public sealed class FileOperationEntry : Entity<Guid>
 
     public bool Success { get; private set; }
 
-    internal void MarkSuccess() => Success = true;
+    public void MarkSuccess() => Success = true;
+
+    public void MarkFailed() => Success = false;
 }
 
 public sealed class OperationBatch : AggregateRoot<Guid>
@@ -53,19 +55,23 @@ public sealed class OperationBatch : AggregateRoot<Guid>
     public static OperationBatch Create(ProjectId projectId, BatchOperationType operationType) =>
         new(Guid.NewGuid(), projectId, operationType);
 
-    public void AddEntry(OperationKind kind, FilePath sourcePath, FilePath targetPath) =>
-        _entries.Add(new FileOperationEntry(kind, sourcePath, targetPath));
+    public FileOperationEntry AddEntry(OperationKind kind, FilePath sourcePath, FilePath targetPath)
+    {
+        var entry = new FileOperationEntry(kind, sourcePath, targetPath);
+        _entries.Add(entry);
+        return entry;
+    }
 
-    public Result Apply()
+    public Result Complete()
     {
         if (Status != BatchStatus.Pending)
         {
-            return Result.Failure("仅待执行批次可以应用。");
+            return Result.Failure("仅待执行批次可以完成。");
         }
 
-        foreach (var entry in _entries)
+        if (!_entries.Any(entry => entry.Success))
         {
-            entry.MarkSuccess();
+            return Result.Failure("没有成功执行的操作。");
         }
 
         Status = BatchStatus.Applied;
@@ -85,4 +91,7 @@ public sealed class OperationBatch : AggregateRoot<Guid>
     }
 
     public bool CanUndo() => Status == BatchStatus.Applied;
+
+    public IReadOnlyList<FileOperationEntry> GetSuccessfulEntries() =>
+        _entries.Where(entry => entry.Success).ToList();
 }

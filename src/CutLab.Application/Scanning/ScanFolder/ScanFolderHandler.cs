@@ -18,17 +18,20 @@ public sealed record ScanFolderResult(
 public sealed class ScanFolderHandler
 {
     private readonly IAnimationProjectRepository _projectRepository;
+    private readonly IScanSessionRepository _sessionRepository;
     private readonly IFileSystemGateway _fileSystemGateway;
     private readonly IRecognitionService _recognitionService;
     private readonly INamingService _namingService;
 
     public ScanFolderHandler(
         IAnimationProjectRepository projectRepository,
+        IScanSessionRepository sessionRepository,
         IFileSystemGateway fileSystemGateway,
         IRecognitionService recognitionService,
         INamingService namingService)
     {
         _projectRepository = projectRepository;
+        _sessionRepository = sessionRepository;
         _fileSystemGateway = fileSystemGateway;
         _recognitionService = recognitionService;
         _namingService = namingService;
@@ -80,6 +83,8 @@ public sealed class ScanFolderHandler
                 proposed,
                 recognition.Status);
         }
+
+        await _sessionRepository.SaveAsync(session, cancellationToken);
 
         return Result.Success(new ScanFolderResult(
             session.Id,

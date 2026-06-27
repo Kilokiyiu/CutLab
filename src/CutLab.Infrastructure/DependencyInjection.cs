@@ -4,7 +4,10 @@ using CutLab.Application.Common.Interfaces;
 using CutLab.Domain.Cuts;
 using CutLab.Domain.Operations;
 using CutLab.Domain.Projects;
+using CutLab.Domain.Scanning;
 using CutLab.Domain.Services;
+using CutLab.Infrastructure.Archive;
+using CutLab.Infrastructure.Export;
 using CutLab.Infrastructure.FileSystem;
 using CutLab.Infrastructure.Naming;
 using CutLab.Infrastructure.Persistence;
@@ -25,11 +28,14 @@ public static class DependencyInjection
 
         services.AddSingleton<IAnimationProjectRepository>(_ => new JsonProjectRepository(storeDirectory));
         services.AddSingleton<ICutRegistryRepository, InMemoryCutRegistryRepository>();
+        services.AddSingleton<IScanSessionRepository, InMemoryScanSessionRepository>();
         services.AddSingleton<IOperationBatchRepository, InMemoryOperationBatchRepository>();
         services.AddSingleton<IUnitOfWork, JsonUnitOfWork>();
         services.AddSingleton<IFileSystemGateway, LocalFileSystemGateway>();
         services.AddSingleton<INamingService, TemplateNamingService>();
         services.AddSingleton<IRecognitionService, RegexRecognitionService>();
+        services.AddSingleton<IArchivePathResolver, TemplateArchivePathResolver>();
+        services.AddSingleton<ICutListExportService, MiniExcelCutListExportService>();
         return services;
     }
 }

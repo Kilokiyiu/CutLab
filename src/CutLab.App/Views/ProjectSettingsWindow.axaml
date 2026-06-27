@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CutLab.App.ViewModels"
+        x:Class="CutLab.App.Views.ProjectSettingsWindow"
+        x:DataType="vm:ProjectSettingsViewModel"
+        Title="项目设置"
+        Width="640"
+        Height="520"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+
+    <Grid RowDefinitions="*,Auto,Auto" Margin="24">
+        <StackPanel Grid.Row="0" Spacing="12">
+            <TextBlock Text="项目设置" FontSize="22" FontWeight="Bold"/>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="项目名称"/>
+                <TextBox Text="{Binding Name}"/>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="集数 (EP)"/>
+                <NumericUpDown Value="{Binding Episode}" Minimum="1" Maximum="999"/>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="命名模板"/>
+                <TextBox Text="{Binding NamingTemplate}"/>
+                <TextBlock Opacity="0.6" FontSize="12" Text="示例: EP{EP:02}_S{SC:02}_C{CUT:03}_{TYPE}"/>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="归档路径模板"/>
+                <TextBox Text="{Binding ArchivePathPattern}"/>
+                <TextBlock Opacity="0.6" FontSize="12" Text="示例: EP{EP:02}/S{SC:02}/C{CUT:03}/{TYPE}"/>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="归档子目录（逗号分隔）"/>
+                <TextBox Text="{Binding ArchiveFoldersText}"/>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="归档根路径"/>
+                <TextBox Text="{Binding RootPath}"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="IndianRed" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+            <Button Content="取消" IsCancel="True" Click="CancelButton_OnClick"/>
+            <Button Content="保存" IsDefault="True" Click="SaveButton_OnClick"/>
+        </StackPanel>
+    </Grid>
+</Window>
