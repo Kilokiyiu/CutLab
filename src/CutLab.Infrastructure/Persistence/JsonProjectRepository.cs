@@ -82,6 +82,8 @@ internal sealed class AnimationProjectDto
 
     public string RootPath { get; set; } = string.Empty;
 
+    public string? DefaultVersionTag { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
@@ -96,6 +98,7 @@ internal sealed class AnimationProjectDto
             ArchivePathPattern = project.ArchiveTemplate.PathPattern,
             ArchiveFolders = project.ArchiveTemplate.FolderNames.ToList(),
             RootPath = project.RootPath.Value,
+            DefaultVersionTag = project.DefaultVersionTag?.Value,
             CreatedAt = project.CreatedAt,
             UpdatedAt = project.UpdatedAt
         };
@@ -122,7 +125,10 @@ internal sealed class AnimationProjectDto
             new WorkspacePath(RootPath),
             [],
             CreatedAt == default ? DateTimeOffset.UtcNow : CreatedAt,
-            UpdatedAt == default ? DateTimeOffset.UtcNow : UpdatedAt);
+            UpdatedAt == default ? DateTimeOffset.UtcNow : UpdatedAt,
+            string.IsNullOrWhiteSpace(DefaultVersionTag)
+                ? null
+                : VersionTagParser.TryParse(DefaultVersionTag));
     }
 
     private static IReadOnlyDictionary<AssetType, string> DefaultTypeSuffixes() =>

@@ -4,7 +4,7 @@ using CutLab.Application.Common;
 using CutLab.Domain.Common;
 using CutLab.Domain.Scanning;
 
-public sealed record GetScanPreviewQuery(Guid SessionId);
+public sealed record GetScanPreviewQuery(Guid SessionId, string? VersionTagFilter = null);
 
 public sealed record ScanPreviewDto(
     Guid SessionId,
@@ -12,7 +12,8 @@ public sealed record ScanPreviewDto(
     int ReadyCount,
     int ConflictCount,
     int AlreadyNamedCount,
-    IReadOnlyList<RenamePlanItem> Items);
+    int UnrecognizedCount,
+    IReadOnlyList<ScanInventoryItem> Items);
 
 public sealed class GetScanPreviewHandler
 {
@@ -33,13 +34,17 @@ public sealed class GetScanPreviewHandler
             return Result.Failure<ScanPreviewDto>("扫描会话不存在。");
         }
 
-        var items = RenamePlanBuilder.Build(session);
+        var filteredSession = ScanAssetFilter.CreateFilteredView(session, query.VersionTagFilter);
+        var items = ScanInventoryBuilder.Build(filteredSession);
+        var renameItems = RenamePlanBuilder.Build(filteredSession);
+
         return Result.Success(new ScanPreviewDto(
             session.Id,
-            session.Assets.Count,
-            items.Count(item => item.Status == RenamePlanStatus.Ready),
-            items.Count(item => item.Status == RenamePlanStatus.Conflict),
-            items.Count(item => item.Status == RenamePlanStatus.AlreadyNamed),
+            filteredSession.Assets.Count,
+            renameItems.Count(item => item.Status == RenamePlanStatus.Ready),
+            renameItems.Count(item => item.Status == RenamePlanStatus.Conflict),
+            renameItems.Count(item => item.Status == RenamePlanStatus.AlreadyNamed),
+            filteredSession.GetUnrecognized().Count,
             items));
     }
 }

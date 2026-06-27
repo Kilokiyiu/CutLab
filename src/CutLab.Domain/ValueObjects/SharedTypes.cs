@@ -19,6 +19,8 @@ public readonly record struct RecognitionPattern(string Pattern);
 
 public readonly record struct MissingCut(CutNumber CutNumber, string Reason);
 
+public readonly record struct MissingInsertSuffix(CutNumber CutNumber, string MissingSuffix, string Reason);
+
 public readonly record struct VersionTag(string Value);
 
 public enum AssetType

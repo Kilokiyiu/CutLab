@@ -10,22 +10,29 @@ public sealed class TemplateNamingService : INamingService
         NamingConvention convention,
         CutNumber cut,
         AssetType type,
-        string extension)
+        string extension,
+        VersionTag? versionTag = null)
     {
         if (!convention.TypeSuffixes.TryGetValue(type, out var typeSuffix))
         {
             return Result.Failure<FileName>($"未配置资产类型 {type} 的后缀。");
         }
 
+        var cutToken = cut.Cut.ToString("D3");
+        if (!string.IsNullOrEmpty(cut.InsertSuffix))
+        {
+            cutToken += cut.InsertSuffix;
+        }
+
         var body = convention.Template
             .Replace("{EP:02}", cut.Episode.ToString("D2"), StringComparison.Ordinal)
             .Replace("{SC:02}", cut.Scene.ToString("D2"), StringComparison.Ordinal)
-            .Replace("{CUT:03}", cut.Cut.ToString("D3"), StringComparison.Ordinal)
+            .Replace("{CUT:03}", cutToken, StringComparison.Ordinal)
             .Replace("{TYPE}", typeSuffix, StringComparison.Ordinal);
 
-        if (!string.IsNullOrEmpty(cut.InsertSuffix))
+        if (versionTag is not null)
         {
-            body += cut.InsertSuffix;
+            body += $"_{versionTag.Value.Value}";
         }
 
         var normalizedExtension = extension.StartsWith('.') ? extension : $".{extension}";

@@ -12,7 +12,8 @@ public sealed record ProjectSettingsDto(
     string NamingTemplate,
     string ArchivePathPattern,
     string ArchiveFoldersText,
-    string RootPath);
+    string RootPath,
+    string DefaultVersionTag);
 
 public sealed class GetProjectHandler
 {
@@ -40,6 +41,7 @@ public sealed class GetProjectHandler
             project.NamingConvention.Template,
             project.ArchiveTemplate.PathPattern,
             string.Join(", ", project.ArchiveTemplate.FolderNames),
-            project.RootPath.Value));
+            project.RootPath.Value,
+            project.DefaultVersionTag?.Value ?? string.Empty));
     }
 }

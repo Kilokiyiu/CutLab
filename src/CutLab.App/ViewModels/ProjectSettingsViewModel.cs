@@ -40,6 +40,9 @@ public partial class ProjectSettingsViewModel : ViewModelBase
     private string _rootPath = string.Empty;
 
     [ObservableProperty]
+    private string _defaultVersionTag = string.Empty;
+
+    [ObservableProperty]
     private string _errorMessage = string.Empty;
 
     public async Task<bool> InitializeAsync(ProjectId projectId)
@@ -58,6 +61,7 @@ public partial class ProjectSettingsViewModel : ViewModelBase
         ArchivePathPattern = result.Value.ArchivePathPattern;
         ArchiveFoldersText = result.Value.ArchiveFoldersText;
         RootPath = result.Value.RootPath;
+        DefaultVersionTag = result.Value.DefaultVersionTag;
         ErrorMessage = string.Empty;
         return true;
     }
@@ -73,7 +77,8 @@ public partial class ProjectSettingsViewModel : ViewModelBase
             NamingTemplate,
             ArchivePathPattern,
             ArchiveFoldersText,
-            RootPath));
+            RootPath,
+            DefaultVersionTag));
 
         if (result.IsFailure)
         {

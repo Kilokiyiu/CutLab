@@ -12,6 +12,7 @@ public sealed record GetMissingCutsFromSessionQuery(ProjectId ProjectId, Guid Se
 public sealed record MissingCutsFromSessionDto(
     CutScope Scope,
     IReadOnlyList<MissingCut> MissingCuts,
+    IReadOnlyList<MissingInsertSuffix> MissingInsertSuffixes,
     int RegisteredCount,
     int TotalExpected);
 
@@ -74,12 +75,14 @@ public sealed class GetMissingCutsFromSessionHandler
         }
 
         var missing = registry.DetectGaps();
+        var missingInserts = registry.DetectInsertSuffixGaps();
         await _registryRepository.SaveAsync(registry, cancellationToken);
         await _unitOfWork.CommitAsync(cancellationToken);
 
         return Result.Success(new MissingCutsFromSessionDto(
             scope,
             missing,
+            missingInserts,
             registry.Cuts.Count,
             scope.To.Cut - scope.From.Cut + 1));
     }

@@ -12,7 +12,8 @@ public sealed record UpdateProjectSettingsCommand(
     string NamingTemplate,
     string ArchivePathPattern,
     string ArchiveFoldersText,
-    string RootPath);
+    string RootPath,
+    string DefaultVersionTag);
 
 public sealed class UpdateProjectSettingsHandler
 {
@@ -64,6 +65,12 @@ public sealed class UpdateProjectSettingsHandler
         if (rootResult.IsFailure)
         {
             return rootResult;
+        }
+
+        var versionResult = project.UpdateDefaultVersionTag(command.DefaultVersionTag);
+        if (versionResult.IsFailure)
+        {
+            return versionResult;
         }
 
         await _repository.SaveAsync(project, cancellationToken);

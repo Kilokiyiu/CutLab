@@ -12,7 +12,8 @@ public sealed class ProductionAsset : Entity<Guid>
         AssetType? assetType,
         FileName? proposedFileName,
         RecognitionStatus recognitionStatus,
-        Guid? conflictWith)
+        Guid? conflictWith,
+        VersionTag? versionTag)
     {
         Id = Guid.NewGuid();
         OriginalPath = originalPath;
@@ -21,6 +22,7 @@ public sealed class ProductionAsset : Entity<Guid>
         ProposedFileName = proposedFileName;
         RecognitionStatus = recognitionStatus;
         ConflictWith = conflictWith;
+        VersionTag = versionTag;
     }
 
     public FilePath OriginalPath { get; }
@@ -34,6 +36,8 @@ public sealed class ProductionAsset : Entity<Guid>
     public RecognitionStatus RecognitionStatus { get; }
 
     public Guid? ConflictWith { get; }
+
+    public VersionTag? VersionTag { get; }
 }
 
 public sealed class ScanSession : AggregateRoot<Guid>
@@ -64,7 +68,8 @@ public sealed class ScanSession : AggregateRoot<Guid>
         CutNumber? parsedCut,
         AssetType? assetType,
         FileName? proposedFileName,
-        RecognitionStatus status)
+        RecognitionStatus status,
+        VersionTag? versionTag = null)
     {
         _assets.Add(new ProductionAsset(
             originalPath,
@@ -72,7 +77,8 @@ public sealed class ScanSession : AggregateRoot<Guid>
             assetType,
             proposedFileName,
             status,
-            null));
+            null,
+            versionTag));
     }
 
     public IReadOnlyList<ProductionAsset> GetRecognized() =>

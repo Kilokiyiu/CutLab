@@ -7,4 +7,6 @@ public interface IFileDialogService
     Task<string?> PickFolderAsync();
 
     Task<string?> SaveExcelFileAsync(string suggestedFileName);
+
+    Task<string?> SaveVideoFileAsync(string suggestedFileName);
 }

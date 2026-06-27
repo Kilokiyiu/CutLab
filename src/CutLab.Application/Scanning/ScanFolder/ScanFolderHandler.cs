@@ -64,11 +64,13 @@ public sealed class ScanFolderHandler
             if (recognition.CutNumber is { } cut && recognition.AssetType is { } type)
             {
                 var extension = Path.GetExtension(fileName);
+                var versionTag = recognition.VersionTag ?? project.DefaultVersionTag;
                 var naming = _namingService.GenerateFileName(
                     project.NamingConvention,
                     cut,
                     type,
-                    extension);
+                    extension,
+                    versionTag);
 
                 if (naming.IsSuccess)
                 {
@@ -81,7 +83,8 @@ public sealed class ScanFolderHandler
                 recognition.CutNumber,
                 recognition.AssetType,
                 proposed,
-                recognition.Status);
+                recognition.Status,
+                recognition.VersionTag);
         }
 
         await _sessionRepository.SaveAsync(session, cancellationToken);

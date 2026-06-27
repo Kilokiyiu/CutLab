@@ -18,22 +18,30 @@ public sealed partial class RegexRecognitionService : IRecognitionService
             var episode = int.Parse(standardMatch.Groups["ep"].Value);
             var scene = int.Parse(standardMatch.Groups["sc"].Value);
             var cut = int.Parse(standardMatch.Groups["cut"].Value);
+            var insert = string.IsNullOrEmpty(standardMatch.Groups["insert"].Value)
+                ? null
+                : standardMatch.Groups["insert"].Value;
             var typeText = standardMatch.Groups["type"].Value;
-            return BuildResult(episode, scene, cut, typeText);
+            var versionTag = ParseVersionGroup(standardMatch);
+            return BuildResult(episode, scene, cut, insert, typeText, versionTag);
         }
 
         if (SimpleCutPattern().Match(nameWithoutExtension) is { Success: true } simpleMatch)
         {
             var cut = int.Parse(simpleMatch.Groups["cut"].Value);
+            var insert = string.IsNullOrEmpty(simpleMatch.Groups["insert"].Value)
+                ? null
+                : simpleMatch.Groups["insert"].Value;
             var typeText = simpleMatch.Groups["type"].Value;
-            return BuildResult(defaultConvention, cut, typeText);
+            var versionTag = ParseVersionGroup(simpleMatch);
+            return BuildResult(defaultConvention, cut, insert, typeText, versionTag);
         }
 
         if (ChineseCardPattern().Match(nameWithoutExtension) is { Success: true } chineseMatch)
         {
             var cut = int.Parse(chineseMatch.Groups["cut"].Value);
             var typeText = chineseMatch.Groups["type"].Value;
-            return BuildResult(defaultConvention, cut, typeText);
+            return BuildResult(defaultConvention, cut, null, typeText, null);
         }
 
         if (OrdinalCardPattern().Match(nameWithoutExtension) is { Success: true } ordinalMatch)
@@ -43,20 +51,28 @@ public sealed partial class RegexRecognitionService : IRecognitionService
                 new CutNumber(1, 1, cut),
                 null,
                 RecognitionStatus.Unrecognized,
-                "已识别卡号，但缺少资产类型。");
+                "已识别卡号，但缺少资产类型。",
+                null);
         }
 
         return new RecognitionResult(null, null, RecognitionStatus.Unrecognized, "未匹配任何识别规则。");
     }
 
+    private static VersionTag? ParseVersionGroup(Match match) =>
+        match.Groups["version"].Success
+            ? VersionTagParser.TryParse(match.Groups["version"].Value)
+            : null;
+
     private static RecognitionResult BuildResult(
         NamingConvention convention,
         int cut,
-        string typeText)
+        string? insertSuffix,
+        string typeText,
+        VersionTag? versionTag)
     {
         var episode = ExtractEpisode(convention);
         var scene = ExtractScene(convention);
-        return BuildResult(episode, scene, cut, typeText);
+        return BuildResult(episode, scene, cut, insertSuffix, typeText, versionTag);
     }
 
     private static int ExtractEpisode(NamingConvention convention)
@@ -71,23 +87,31 @@ public sealed partial class RegexRecognitionService : IRecognitionService
         return match.Success ? int.Parse(match.Groups["value"].Value) : 1;
     }
 
-    private static RecognitionResult BuildResult(int episode, int scene, int cut, string typeText)
+    private static RecognitionResult BuildResult(
+        int episode,
+        int scene,
+        int cut,
+        string? insertSuffix,
+        string typeText,
+        VersionTag? versionTag)
     {
         var assetType = MapAssetType(typeText);
         if (assetType is null)
         {
             return new RecognitionResult(
-                new CutNumber(episode, scene, cut),
+                new CutNumber(episode, scene, cut, insertSuffix),
                 null,
                 RecognitionStatus.Unrecognized,
-                $"无法识别资产类型：{typeText}");
+                $"无法识别资产类型：{typeText}",
+                versionTag);
         }
 
         return new RecognitionResult(
-            new CutNumber(episode, scene, cut),
+            new CutNumber(episode, scene, cut, insertSuffix),
             assetType,
             RecognitionStatus.Recognized,
-            null);
+            null,
+            versionTag);
     }
 
     private static AssetType? MapAssetType(string typeText) =>
@@ -101,10 +125,10 @@ public sealed partial class RegexRecognitionService : IRecognitionService
             _ => null
         };
 
-    [GeneratedRegex(@"^EP(?<ep>\d+)_S(?<sc>\d+)_C(?<cut>\d+)_(?<type>分镜|原画|动画|背景|渲染)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^EP(?<ep>\d+)_S(?<sc>\d+)_C(?<cut>\d+)(?<insert>[a-z]?)_(?<type>分镜|原画|动画|背景|渲染)(?:_(?<version>v\d+|draft|s))?$", RegexOptions.IgnoreCase)]
     private static partial Regex StandardCutPattern();
 
-    [GeneratedRegex(@"^C(?<cut>\d+)_(?<type>分镜|原画|动画|背景|渲染)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^C(?<cut>\d+)(?<insert>[a-z]?)_(?<type>分镜|原画|动画|背景|渲染)(?:_(?<version>v\d+|draft|s))?$", RegexOptions.IgnoreCase)]
     private static partial Regex SimpleCutPattern();
 
     [GeneratedRegex(@"^(?<cut>\d+)卡(?<type>分镜|原画|动画|背景|渲染)$")]

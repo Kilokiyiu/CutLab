@@ -7,7 +7,11 @@ using CutLab.Domain.Projects;
 using CutLab.Domain.Scanning;
 using CutLab.Domain.ValueObjects;
 
-public sealed record ExportCutListCommand(ProjectId ProjectId, Guid SessionId, string OutputPath);
+public sealed record ExportCutListCommand(
+    ProjectId ProjectId,
+    Guid SessionId,
+    string OutputPath,
+    string? VersionTagFilter = null);
 
 public sealed record ExportCutListResult(string OutputPath, int RowCount);
 
@@ -42,10 +46,11 @@ public sealed class ExportCutListHandler
             return Result.Failure<ExportCutListResult>("导出路径不能为空。");
         }
 
-        var renameItems = RenamePlanBuilder.Build(session)
+        var filteredSession = ScanAssetFilter.CreateFilteredView(session, command.VersionTagFilter);
+        var renameItems = RenamePlanBuilder.Build(filteredSession)
             .ToDictionary(item => item.AssetId);
 
-        var rows = session.Assets
+        var rows = filteredSession.Assets
             .OrderBy(asset => asset.ParsedCut?.Cut ?? int.MaxValue)
             .ThenBy(asset => asset.OriginalPath.Value, StringComparer.OrdinalIgnoreCase)
             .Select(asset => MapRow(asset, renameItems.GetValueOrDefault(asset.Id)))
@@ -72,6 +77,7 @@ public sealed class ExportCutListHandler
             asset.RecognitionStatus.ToString(),
             asset.ProposedFileName?.Value ?? string.Empty,
             renameItem?.Status.ToString() ?? string.Empty,
-            renameItem?.Message ?? string.Empty);
+            renameItem?.Message ?? string.Empty,
+            asset.VersionTag?.Value ?? string.Empty);
     }
 }

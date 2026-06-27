@@ -26,4 +26,27 @@ public class TemplateNamingServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("EP01_S02_C003_原画.png", result.Value!.Value);
     }
+
+    [Fact]
+    public void GenerateFileName_ShouldAppendInsertSuffixAndVersionTag()
+    {
+        var service = new TemplateNamingService();
+        var convention = NamingConvention.Create(
+            "EP{EP:02}_S{SC:02}_C{CUT:03}_{TYPE}",
+            "_",
+            new Dictionary<AssetType, string>
+            {
+                [AssetType.Keyframe] = "原画"
+            }).Value!;
+
+        var result = service.GenerateFileName(
+            convention,
+            new CutNumber(1, 2, 3, "b"),
+            AssetType.Keyframe,
+            ".png",
+            new VersionTag("v2"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("EP01_S02_C003b_原画_v2.png", result.Value!.Value);
+    }
 }

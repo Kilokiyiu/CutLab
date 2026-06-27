@@ -14,7 +14,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         WorkspacePath rootPath,
         IReadOnlyList<RecognitionPattern> recognitionPatterns,
         DateTimeOffset? createdAt = null,
-        DateTimeOffset? updatedAt = null)
+        DateTimeOffset? updatedAt = null,
+        VersionTag? defaultVersionTag = null)
     {
         Id = id;
         Name = name;
@@ -25,6 +26,7 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         RecognitionPatterns = recognitionPatterns;
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow;
         UpdatedAt = updatedAt ?? CreatedAt;
+        DefaultVersionTag = defaultVersionTag;
     }
 
     public string Name { get; private set; }
@@ -42,6 +44,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
     public DateTimeOffset CreatedAt { get; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public VersionTag? DefaultVersionTag { get; private set; }
 
     public static Result<AnimationProject> Create(
         string name,
@@ -80,7 +84,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         WorkspacePath rootPath,
         IReadOnlyList<RecognitionPattern> recognitionPatterns,
         DateTimeOffset createdAt,
-        DateTimeOffset updatedAt) =>
+        DateTimeOffset updatedAt,
+        VersionTag? defaultVersionTag = null) =>
         new(
             id,
             name.Trim(),
@@ -90,7 +95,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
             rootPath,
             recognitionPatterns,
             createdAt,
-            updatedAt);
+            updatedAt,
+            defaultVersionTag);
 
     public Result UpdateNamingConvention(NamingConvention convention)
     {
@@ -127,6 +133,26 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         }
 
         RootPath = rootPath;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Success();
+    }
+
+    public Result UpdateDefaultVersionTag(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            DefaultVersionTag = null;
+            UpdatedAt = DateTimeOffset.UtcNow;
+            return Result.Success();
+        }
+
+        var parsed = VersionTagParser.TryParse(raw);
+        if (parsed is null)
+        {
+            return Result.Failure("版本标签格式无效（支持 v1、draft、s 等）。");
+        }
+
+        DefaultVersionTag = parsed;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Success();
     }

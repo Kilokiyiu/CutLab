@@ -11,7 +11,8 @@ public sealed record CutListExportRow(
     string RecognitionStatus,
     string ProposedName,
     string RenameStatus,
-    string Note);
+    string Note,
+    string VersionTag);
 
 public interface ICutListExportService
 {

@@ -62,6 +62,15 @@ public sealed class CutRegistry : AggregateRoot<Guid>
         return Result.Success();
     }
 
+    public Result<CutNumber> CreateInsertCut(int afterCut, int episode, int scene, IEnumerable<string?> existingInsertSuffixes)
+    {
+        var suffix = CutInsertSuffixGenerator.Next(existingInsertSuffixes);
+        var cutNumber = new CutNumber(episode, scene, afterCut, suffix);
+        return RegisterCut(cutNumber).IsSuccess
+            ? Result.Success(cutNumber)
+            : Result.Failure<CutNumber>($"无法注册插卡 {cutNumber}。");
+    }
+
     public IReadOnlyList<MissingCut> DetectGaps()
     {
         var missing = new List<MissingCut>();
@@ -72,6 +81,41 @@ public sealed class CutRegistry : AggregateRoot<Guid>
             if (_cuts.All(c => c.CutNumber.Cut != cut))
             {
                 missing.Add(new MissingCut(candidate, "范围内无对应镜头。"));
+            }
+        }
+
+        return missing;
+    }
+
+    public IReadOnlyList<MissingInsertSuffix> DetectInsertSuffixGaps()
+    {
+        var missing = new List<MissingInsertSuffix>();
+        var groups = _cuts
+            .GroupBy(cut => (cut.CutNumber.Episode, cut.CutNumber.Scene, cut.CutNumber.Cut));
+
+        foreach (var group in groups)
+        {
+            var usedSuffixes = group
+                .Select(cut => cut.CutNumber.InsertSuffix)
+                .Where(suffix => !string.IsNullOrWhiteSpace(suffix))
+                .Select(suffix => suffix![0])
+                .ToHashSet();
+
+            if (usedSuffixes.Count == 0)
+            {
+                continue;
+            }
+
+            var maxSuffix = usedSuffixes.Max();
+            for (var letter = 'b'; letter <= maxSuffix; letter++)
+            {
+                if (!usedSuffixes.Contains(letter))
+                {
+                    missing.Add(new MissingInsertSuffix(
+                        new CutNumber(group.Key.Episode, group.Key.Scene, group.Key.Cut, letter.ToString()),
+                        letter.ToString(),
+                        $"C{group.Key.Cut:D3} 缺少插卡后缀 {letter}。"));
+                }
             }
         }
 

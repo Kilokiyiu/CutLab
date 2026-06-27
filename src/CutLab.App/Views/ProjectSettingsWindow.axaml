@@ -5,7 +5,7 @@
         x:DataType="vm:ProjectSettingsViewModel"
         Title="项目设置"
         Width="640"
-        Height="520"
+        Height="580"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
@@ -43,6 +43,12 @@
             <StackPanel Spacing="4">
                 <TextBlock Text="归档根路径"/>
                 <TextBox Text="{Binding RootPath}"/>
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="默认版本标签（可选）"/>
+                <TextBox Text="{Binding DefaultVersionTag}"/>
+                <TextBlock Opacity="0.6" FontSize="12" Text="示例: v1、draft、s；留空则不附加"/>
             </StackPanel>
 
             <TextBlock Text="{Binding ErrorMessage}" Foreground="IndianRed" TextWrapping="Wrap"/>

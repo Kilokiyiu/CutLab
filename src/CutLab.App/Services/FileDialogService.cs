@@ -48,4 +48,25 @@ public sealed class FileDialogService : IFileDialogService
 
         return file?.Path.LocalPath;
     }
+
+    public async Task<string?> SaveVideoFileAsync(string suggestedFileName)
+    {
+        if (_owner is null)
+        {
+            return null;
+        }
+
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "保存预览视频",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "mp4",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("MP4 视频") { Patterns = ["*.mp4"] }
+            ]
+        });
+
+        return file?.Path.LocalPath;
+    }
 }

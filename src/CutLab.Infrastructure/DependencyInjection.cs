@@ -12,6 +12,7 @@ using CutLab.Infrastructure.FileSystem;
 using CutLab.Infrastructure.Naming;
 using CutLab.Infrastructure.Persistence;
 using CutLab.Infrastructure.Recognition;
+using CutLab.Infrastructure.Video;
 using Microsoft.Extensions.DependencyInjection;
 
 public static class DependencyInjection
@@ -36,6 +37,8 @@ public static class DependencyInjection
         services.AddSingleton<IRecognitionService, RegexRecognitionService>();
         services.AddSingleton<IArchivePathResolver, TemplateArchivePathResolver>();
         services.AddSingleton<ICutListExportService, MiniExcelCutListExportService>();
+        services.AddSingleton<IProgressReportExportService, MiniExcelProgressReportExportService>();
+        services.AddSingleton<IPreviewVideoGenerator, FfmpegPreviewVideoGenerator>();
         return services;
     }
 }

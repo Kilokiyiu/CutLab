@@ -9,14 +9,16 @@ public interface INamingService
         NamingConvention convention,
         CutNumber cut,
         AssetType type,
-        string extension);
+        string extension,
+        VersionTag? versionTag = null);
 }
 
 public sealed record RecognitionResult(
     CutNumber? CutNumber,
     AssetType? AssetType,
     RecognitionStatus Status,
-    string? Reason);
+    string? Reason,
+    VersionTag? VersionTag = null);
 
 public interface IRecognitionService
 {

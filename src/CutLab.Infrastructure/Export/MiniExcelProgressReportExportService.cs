@@ -3,11 +3,11 @@ namespace CutLab.Infrastructure.Export;
 using CutLab.Application.Common.Interfaces;
 using MiniExcelLibs;
 
-public sealed class MiniExcelCutListExportService : ICutListExportService
+public sealed class MiniExcelProgressReportExportService : IProgressReportExportService
 {
     public Task ExportAsync(
         string outputPath,
-        IReadOnlyList<CutListExportRow> rows,
+        IReadOnlyList<ProgressReportRow> rows,
         CancellationToken cancellationToken = default)
     {
         var sheetRows = rows.Select(row => new
@@ -16,14 +16,14 @@ public sealed class MiniExcelCutListExportService : ICutListExportService
             集 = row.Episode,
             场 = row.Scene,
             镜 = row.Cut,
-            类型 = row.AssetType,
-            文件名 = row.FileName,
-            路径 = row.FilePath,
-            识别状态 = row.RecognitionStatus,
-            建议文件名 = row.ProposedName,
-            重命名状态 = row.RenameStatus,
-            备注 = row.Note,
-            版本标签 = row.VersionTag
+            插卡 = row.InsertSuffix,
+            分镜 = row.HasStoryboard,
+            原画 = row.HasKeyframe,
+            动画 = row.HasInbetween,
+            背景 = row.HasBackground,
+            渲染 = row.HasRender,
+            文件数 = row.FileCount,
+            进度状态 = row.ProgressStatus
         });
 
         MiniExcel.SaveAs(outputPath, sheetRows);

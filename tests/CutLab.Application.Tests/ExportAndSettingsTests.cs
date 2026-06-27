@@ -95,7 +95,8 @@ public class UpdateProjectSettingsHandlerTests
                 "C{CUT:03}_{TYPE}",
                 "C{CUT:03}/{TYPE}",
                 "分镜, 原画",
-                tempDir));
+                tempDir,
+                "v1"));
 
             Assert.True(updateResult.IsSuccess);
 
@@ -104,6 +105,7 @@ public class UpdateProjectSettingsHandlerTests
             Assert.Equal("New Name", project!.Name);
             Assert.Equal(2, project.Episode.Value);
             Assert.Equal("C{CUT:03}_{TYPE}", project.NamingConvention.Template);
+            Assert.Equal("v1", project.DefaultVersionTag?.Value);
         }
         finally
         {

@@ -41,4 +41,22 @@ public class RegexRecognitionServiceTests
         Assert.NotNull(result.CutNumber);
         Assert.Null(result.AssetType);
     }
+
+    [Theory]
+    [InlineData("EP01_S02_C003b_原画.png", 3, "b", null)]
+    [InlineData("EP01_S02_C003_原画_v1.png", 3, null, "v1")]
+    [InlineData("C004_分镜_draft.jpg", 4, null, "draft")]
+    public void TryParse_ShouldRecognizeInsertSuffixAndVersionTag(
+        string fileName,
+        int cut,
+        string? insertSuffix,
+        string? versionTag)
+    {
+        var result = _service.TryParse(fileName, [], _convention);
+
+        Assert.Equal(RecognitionStatus.Recognized, result.Status);
+        Assert.Equal(cut, result.CutNumber!.Value.Cut);
+        Assert.Equal(insertSuffix, result.CutNumber.Value.InsertSuffix);
+        Assert.Equal(versionTag, result.VersionTag?.Value);
+    }
 }
