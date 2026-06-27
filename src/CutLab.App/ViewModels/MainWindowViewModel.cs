@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CutLab.App.Services;
 using CutLab.Application.Common;
+using CutLab.Application.Operations.BatchAutoNumberUnrecognized;
 using CutLab.Application.Operations.ExecuteArchive;
 using CutLab.Application.Operations.ExecuteRename;
 using CutLab.Application.Operations.InsertCut;
@@ -40,6 +41,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly GetMissingCutsFromSessionHandler _getMissingCutsFromSessionHandler;
     private readonly UndoLastOperationHandler _undoLastOperationHandler;
     private readonly InsertCutHandler _insertCutHandler;
+    private readonly BatchAutoNumberUnrecognizedHandler _batchAutoNumberHandler;
     private readonly GeneratePreviewVideoHandler _generatePreviewVideoHandler;
     private readonly ExportProgressReportHandler _exportProgressReportHandler;
     private readonly GetProjectHandler _getProjectHandler;
@@ -61,6 +63,7 @@ public partial class MainWindowViewModel : ViewModelBase
         GetMissingCutsFromSessionHandler getMissingCutsFromSessionHandler,
         UndoLastOperationHandler undoLastOperationHandler,
         InsertCutHandler insertCutHandler,
+        BatchAutoNumberUnrecognizedHandler batchAutoNumberHandler,
         GeneratePreviewVideoHandler generatePreviewVideoHandler,
         ExportProgressReportHandler exportProgressReportHandler,
         GetProjectHandler getProjectHandler)
@@ -77,10 +80,12 @@ public partial class MainWindowViewModel : ViewModelBase
         _getMissingCutsFromSessionHandler = getMissingCutsFromSessionHandler;
         _undoLastOperationHandler = undoLastOperationHandler;
         _insertCutHandler = insertCutHandler;
+        _batchAutoNumberHandler = batchAutoNumberHandler;
         _generatePreviewVideoHandler = generatePreviewVideoHandler;
         _exportProgressReportHandler = exportProgressReportHandler;
         _getProjectHandler = getProjectHandler;
         PreviewItems = [];
+        PreviewItems.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShotListTitle));
         RecentProjects = [];
         CutGallery = [];
         _ = InitializeAsync();
@@ -127,13 +132,22 @@ public partial class MainWindowViewModel : ViewModelBase
     private Bitmap? _previewImage;
 
     [ObservableProperty]
-    private string _previewCaption = "选择一行以预览图片。";
+    private string _previewCaption = "选择左侧列表中的文件以预览。";
+
+    [ObservableProperty]
+    private string _galleryHint = string.Empty;
+
+    [ObservableProperty]
+    private bool _showGalleryHint;
 
     public ObservableCollection<PreviewRowViewModel> PreviewItems { get; }
 
     public ObservableCollection<ProjectListItemViewModel> RecentProjects { get; }
 
     public ObservableCollection<CutGalleryItemViewModel> CutGallery { get; }
+
+    public string ShotListTitle =>
+        PreviewItems.Count == 0 ? "镜头清单" : $"镜头清单（{PreviewItems.Count}）";
 
     public AssetType[] AvailableAssetTypes { get; } = Enum.GetValues<AssetType>();
 
@@ -425,6 +439,56 @@ public partial class MainWindowViewModel : ViewModelBase
 
             await RescanAsync();
             return $"插卡 {result.Value.InsertCutNumber} 完成：重命名 {result.Value.RenamedCount} 个文件。";
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanBatchAutoNumber))]
+    private async Task BatchAutoNumberAsync()
+    {
+        if (_currentProjectId is null || _currentSessionId is null)
+        {
+            return;
+        }
+
+        await RunOperationAsync("正在自动编号重命名...", async () =>
+        {
+            var preview = await _batchAutoNumberHandler.HandleAsync(new BatchAutoNumberUnrecognizedCommand(
+                _currentProjectId.Value,
+                _currentSessionId.Value,
+                InsertAfterCut,
+                InsertAssetType,
+                DryRun: true));
+
+            if (preview.IsFailure || preview.Value is null)
+            {
+                return preview.Error ?? "自动编号预览失败。";
+            }
+
+            PreviewItems.Clear();
+            foreach (var item in preview.Value.Items)
+            {
+                PreviewItems.Add(PreviewRowViewModel.FromRename(item));
+            }
+
+            if (preview.Value.ReadyCount == 0)
+            {
+                return "没有可自动编号的未识别文件。";
+            }
+
+            var result = await _batchAutoNumberHandler.HandleAsync(new BatchAutoNumberUnrecognizedCommand(
+                _currentProjectId.Value,
+                _currentSessionId.Value,
+                InsertAfterCut,
+                InsertAssetType,
+                DryRun: false));
+
+            if (result.IsFailure || result.Value is null)
+            {
+                return result.Error ?? "自动编号重命名失败。";
+            }
+
+            await RescanAsync();
+            return $"自动编号完成：C{result.Value.StartCutNumber:D3}–C{result.Value.EndCutNumber:D3}，重命名 {result.Value.RenamedCount} 个文件。";
         });
     }
 
@@ -740,13 +804,18 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         CutGallery.Clear();
         var seenCutIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var row in PreviewItems.Where(item => item.IsImage && !string.IsNullOrWhiteSpace(item.CutId)))
+        foreach (var row in PreviewItems.Where(item => item.IsImage && item.HasCutId))
         {
             if (seenCutIds.Add(row.CutId))
             {
                 CutGallery.Add(new CutGalleryItemViewModel(row.CutId, row.FullPath));
             }
         }
+
+        ShowGalleryHint = CutGallery.Count == 0 && PreviewItems.Count > 0;
+        GalleryHint = ShowGalleryHint
+            ? "下方缩略图仅展示已识别卡号。未识别文件请先在左侧列表查看，或通过插卡/重命名规范命名。"
+            : string.Empty;
     }
 
     private string? GetActiveVersionFilter() =>
@@ -823,6 +892,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanInsertCut() => !IsBusy && _currentSessionId is not null && InsertAfterCut > 0;
 
+    private bool CanBatchAutoNumber() => !IsBusy && _currentSessionId is not null && InsertAfterCut > 0;
+
     private bool CanGeneratePreview() => !IsBusy && _currentSessionId is not null;
 
     private bool CanApplyVersionFilter() => !IsBusy && _currentSessionId is not null;
@@ -841,6 +912,7 @@ public partial class MainWindowViewModel : ViewModelBase
         MoveToArchiveCommand.NotifyCanExecuteChanged();
         DetectMissingCutsCommand.NotifyCanExecuteChanged();
         InsertCutCommand.NotifyCanExecuteChanged();
+        BatchAutoNumberCommand.NotifyCanExecuteChanged();
         GeneratePreviewVideoCommand.NotifyCanExecuteChanged();
         ApplyVersionFilterCommand.NotifyCanExecuteChanged();
         RefreshProjectsCommand.NotifyCanExecuteChanged();
@@ -865,13 +937,18 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (value is null)
         {
-            PreviewCaption = "选择一行以预览图片。";
+            PreviewCaption = "选择左侧列表中的文件以预览。";
             return;
         }
 
-        PreviewCaption = string.IsNullOrWhiteSpace(value.CutId)
-            ? value.Source
-            : $"{value.CutId} · {value.Source}";
+        if (!value.HasCutId)
+        {
+            PreviewCaption = $"未识别 · {value.Source}（{value.Message}）";
+        }
+        else
+        {
+            PreviewCaption = $"{value.CutId} · {value.Source}";
+        }
 
         if (!value.IsImage || !File.Exists(value.FullPath))
         {
@@ -920,6 +997,10 @@ public sealed class PreviewRowViewModel
     }
 
     public string CutId { get; }
+
+    public string DisplayCutId => HasCutId ? CutId : "（未识别）";
+
+    public bool HasCutId => !string.IsNullOrWhiteSpace(CutId);
 
     public string FullPath { get; }
 

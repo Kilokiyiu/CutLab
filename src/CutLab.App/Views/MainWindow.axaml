@@ -1,190 +1,640 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:CutLab.App.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="820"
-        x:Class="CutLab.App.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="CutLab"
-        Width="1280" Height="820">
-
-    <Design.DataContext>
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
-
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" Margin="24">
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,4">
-            <StackPanel Grid.Column="0" Spacing="4">
-                <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="Bold"/>
-                <TextBlock Text="{Binding Subtitle}" Opacity="0.7"/>
-            </StackPanel>
-            <ComboBox Grid.Column="1"
-                      Width="260"
-                      Margin="8,0,0,0"
-                      VerticalAlignment="Center"
-                      ItemsSource="{Binding RecentProjects}"
-                      SelectedItem="{Binding SelectedProject}"
-                      PlaceholderText="选择项目"/>
-            <Button Grid.Column="2"
-                    Margin="8,0,0,0"
-                    VerticalAlignment="Center"
-                    Content="新建项目"
-                    Command="{Binding NewProjectCommand}"/>
-            <Button Grid.Column="3"
-                    Margin="8,0,0,0"
-                    VerticalAlignment="Center"
-                    Content="刷新"
-                    Command="{Binding RefreshProjectsCommand}"/>
-        </Grid>
-
-        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,16,0,8">
-            <TextBox Grid.Column="0"
-                     PlaceholderText="输入或选择待扫描文件夹路径"
-                     Text="{Binding SourcePath}"/>
-            <Button Grid.Column="1"
-                    Margin="8,0,0,0"
-                    Content="浏览..."
-                    Command="{Binding PickFolderCommand}"/>
-            <CheckBox Grid.Column="2"
-                      Margin="8,0,0,0"
-                      Content="含子目录"
-                      VerticalAlignment="Center"
-                      IsChecked="{Binding ScanRecursive}"/>
-            <Button Grid.Column="3"
-                    Margin="8,0,0,0"
-                    Content="扫描"
-                    Command="{Binding ScanCommand}"/>
-        </Grid>
-
-        <WrapPanel Grid.Row="2" Margin="0,0,0,8">
-            <Button Content="项目设置" Margin="0,0,8,8" Command="{Binding OpenSettingsCommand}"/>
-            <Button Content="执行重命名" Margin="0,0,8,8" Command="{Binding ExecuteRenameCommand}"/>
-            <Button Content="创建归档目录" Margin="0,0,8,8" Command="{Binding CreateArchiveDirectoriesCommand}"/>
-            <Button Content="移动到归档" Margin="0,0,8,8" Command="{Binding MoveToArchiveCommand}"/>
-            <Button Content="缺卡检测" Margin="0,0,8,8" Command="{Binding DetectMissingCutsCommand}"/>
-            <Button Content="导出 Excel" Margin="0,0,8,8" Command="{Binding ExportCutListCommand}"/>
-            <Button Content="导出进度台账" Margin="0,0,8,8" Command="{Binding ExportProgressReportCommand}"/>
-            <Button Content="生成预览视频" Margin="0,0,8,8" Command="{Binding GeneratePreviewVideoCommand}"/>
-            <Button Content="撤销上次" Margin="0,0,8,8" Command="{Binding UndoCommand}"/>
-        </WrapPanel>
-
-        <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto" Margin="0,0,0,12">
-            <TextBlock Grid.Column="0" Text="插卡位置" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <NumericUpDown Grid.Column="1"
-                           Width="90"
-                           Minimum="1"
-                           Maximum="999"
-                           Value="{Binding InsertAfterCut}"/>
-            <TextBlock Grid.Column="2" Text="资产类型" VerticalAlignment="Center" Margin="12,0,8,0"/>
-            <ComboBox Grid.Column="3"
-                      Width="120"
-                      ItemsSource="{Binding AvailableAssetTypes}"
-                      SelectedItem="{Binding InsertAssetType}"/>
-            <CheckBox Grid.Column="4"
-                      Margin="12,0,0,0"
-                      Content="仅未识别文件"
-                      VerticalAlignment="Center"
-                      IsChecked="{Binding InsertUnrecognizedOnly}"/>
-            <Button Grid.Column="6"
-                    Margin="8,0,0,0"
-                    Content="插卡重命名"
-                    Command="{Binding InsertCutCommand}"/>
-            <TextBox Grid.Column="5"
-                     Margin="16,0,8,0"
-                     PlaceholderText="版本标签筛选 (v1/draft/s)"
-                     Text="{Binding VersionTagFilter}"/>
-            <Button Grid.Column="7"
-                    Content="筛选"
-                    Command="{Binding ApplyVersionFilterCommand}"/>
-        </Grid>
-
-        <Grid Grid.Row="4" ColumnDefinitions="*,300">
-            <DataGrid Grid.Column="0"
-                      ItemsSource="{Binding PreviewItems}"
-                      SelectedItem="{Binding SelectedPreviewRow}"
-                      IsReadOnly="True"
-                      AutoGenerateColumns="False"
-                      CanUserReorderColumns="False"
-                      CanUserResizeColumns="True"
-                      CanUserSortColumns="True">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="卡号" Binding="{Binding CutId}" Width="*"/>
-                    <DataGridTextColumn Header="来源" Binding="{Binding Source}" Width="2*"/>
-                    <DataGridTextColumn Header="目标" Binding="{Binding Target}" Width="2*"/>
-                    <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="*"/>
-                    <DataGridTextColumn Header="说明" Binding="{Binding Message}" Width="2*"/>
-                </DataGrid.Columns>
-            </DataGrid>
-
-            <Border Grid.Column="1"
-                    Margin="12,0,0,0"
-                    Padding="12"
-                    BorderBrush="#DDD"
-                    BorderThickness="1"
-                    CornerRadius="4">
-                <Grid RowDefinitions="Auto,Auto,*,Auto">
-                    <TextBlock Grid.Row="0"
-                               Text="卡号预览"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock Grid.Row="1"
-                               Text="{Binding PreviewCaption}"
-                               TextWrapping="Wrap"
-                               Opacity="0.85"
-                               Margin="0,0,0,8"/>
-                    <Image Grid.Row="2"
-                           Source="{Binding PreviewImage}"
-                           Stretch="Uniform"
-                           MaxHeight="320"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
-                    <ScrollViewer Grid.Row="3"
-                                  Margin="0,12,0,0"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Disabled"
-                                  MaxHeight="96">
-                        <ItemsControl ItemsSource="{Binding CutGallery}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="8"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:CutGalleryItemViewModel">
-                                    <Button Padding="4"
-                                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectGalleryCutCommand}"
-                                            CommandParameter="{Binding CutId}">
-                                        <StackPanel Width="72" Spacing="4">
-                                            <Image Source="{Binding Thumbnail}"
-                                                   Width="64"
-                                                   Height="64"
-                                                   Stretch="Uniform"/>
-                                            <TextBlock Text="{Binding CutId}"
-                                                       FontSize="11"
-                                                       HorizontalAlignment="Center"
-                                                       TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
-        </Grid>
-
-        <TextBlock Grid.Row="5"
-                   Margin="0,12,0,0"
-                   Text="{Binding MissingCutsSummary}"
-                   TextWrapping="Wrap"
-                   FontWeight="SemiBold"/>
-
-        <TextBlock Grid.Row="6"
-                   Margin="0,8,0,0"
-                   Text="{Binding StatusMessage}"
-                   TextWrapping="Wrap"
-                   Opacity="0.85"/>
-    </Grid>
-</Window>
+<Window xmlns="https://github.com/avaloniaui"
+
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+
+        xmlns:vm="using:CutLab.App.ViewModels"
+
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+        mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
+
+        x:Class="CutLab.App.Views.MainWindow"
+
+        x:DataType="vm:MainWindowViewModel"
+
+        Icon="/Assets/avalonia-logo.ico"
+
+        Title="CutLab — 镜头卡号生产管理"
+
+        Width="1400" Height="900"
+
+        Background="#2B2B2B">
+
+
+
+    <Design.DataContext>
+
+        <vm:MainWindowViewModel/>
+
+    </Design.DataContext>
+
+
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+
+
+        <!-- Menu bar -->
+
+        <Menu Grid.Row="0">
+
+            <MenuItem Header="文件">
+
+                <MenuItem Header="浏览文件夹..." Command="{Binding PickFolderCommand}"/>
+
+                <MenuItem Header="扫描" Command="{Binding ScanCommand}"/>
+
+                <Separator/>
+
+                <MenuItem Header="导出 Excel" Command="{Binding ExportCutListCommand}"/>
+
+                <MenuItem Header="导出进度台账" Command="{Binding ExportProgressReportCommand}"/>
+
+            </MenuItem>
+
+            <MenuItem Header="项目">
+
+                <MenuItem Header="新建项目" Command="{Binding NewProjectCommand}"/>
+
+                <MenuItem Header="刷新项目列表" Command="{Binding RefreshProjectsCommand}"/>
+
+                <Separator/>
+
+                <MenuItem Header="项目设置..." Command="{Binding OpenSettingsCommand}"/>
+
+            </MenuItem>
+
+            <MenuItem Header="操作">
+
+                <MenuItem Header="执行重命名" Command="{Binding ExecuteRenameCommand}"/>
+
+                <MenuItem Header="插卡重命名" Command="{Binding InsertCutCommand}"/>
+
+                <MenuItem Header="自动编号（未识别）" Command="{Binding BatchAutoNumberCommand}"/>
+
+                <Separator/>
+
+                <MenuItem Header="创建归档目录" Command="{Binding CreateArchiveDirectoriesCommand}"/>
+
+                <MenuItem Header="移动到归档" Command="{Binding MoveToArchiveCommand}"/>
+
+                <Separator/>
+
+                <MenuItem Header="缺卡检测" Command="{Binding DetectMissingCutsCommand}"/>
+
+                <MenuItem Header="生成预览视频" Command="{Binding GeneratePreviewVideoCommand}"/>
+
+                <Separator/>
+
+                <MenuItem Header="撤销上次操作" Command="{Binding UndoCommand}"/>
+
+            </MenuItem>
+
+        </Menu>
+
+
+
+        <!-- Toolbar -->
+
+        <Border Grid.Row="1" Classes="toolbar">
+
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+
+                          VerticalScrollBarVisibility="Disabled">
+
+                <StackPanel Orientation="Horizontal" Spacing="2">
+
+                    <ComboBox Width="220"
+
+                              Margin="4,0,0,0"
+
+                              VerticalAlignment="Center"
+
+                              ItemsSource="{Binding RecentProjects}"
+
+                              SelectedItem="{Binding SelectedProject}"
+
+                              PlaceholderText="选择项目"/>
+
+                    <Button Classes="toolbar-btn" Content="新建" Command="{Binding NewProjectCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="刷新" Command="{Binding RefreshProjectsCommand}"/>
+
+                    <Border Classes="toolbar-separator"/>
+
+                    <Button Classes="toolbar-btn primary" Content="扫描" Command="{Binding ScanCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="重命名" Command="{Binding ExecuteRenameCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="插卡" Command="{Binding InsertCutCommand}"/>
+
+                    <Button Classes="toolbar-btn primary" Content="自动编号" Command="{Binding BatchAutoNumberCommand}"/>
+
+                    <Border Classes="toolbar-separator"/>
+
+                    <Button Classes="toolbar-btn" Content="建归档" Command="{Binding CreateArchiveDirectoriesCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="移归档" Command="{Binding MoveToArchiveCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="缺卡" Command="{Binding DetectMissingCutsCommand}"/>
+
+                    <Border Classes="toolbar-separator"/>
+
+                    <Button Classes="toolbar-btn" Content="Excel" Command="{Binding ExportCutListCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="台账" Command="{Binding ExportProgressReportCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="预览视频" Command="{Binding GeneratePreviewVideoCommand}"/>
+
+                    <Border Classes="toolbar-separator"/>
+
+                    <Button Classes="toolbar-btn" Content="撤销" Command="{Binding UndoCommand}"/>
+
+                    <Button Classes="toolbar-btn" Content="设置" Command="{Binding OpenSettingsCommand}"/>
+
+                </StackPanel>
+
+            </ScrollViewer>
+
+        </Border>
+
+
+
+        <!-- Main workspace -->
+
+        <Grid Grid.Row="2" ColumnDefinitions="280,Auto,*,Auto,360">
+
+
+
+            <!-- Left sidebar: scan & insert settings -->
+
+            <Border Grid.Column="0" Classes="side-panel">
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+
+                    <StackPanel Spacing="0">
+
+                        <Border Classes="section-header">
+
+                            <TextBlock Text="扫描"/>
+
+                        </Border>
+
+                        <StackPanel Margin="12,10" Spacing="8">
+
+                            <TextBox PlaceholderText="源文件夹路径"
+
+                                     Text="{Binding SourcePath}"
+
+                                     TextWrapping="Wrap"
+
+                                     MinHeight="32"/>
+
+                            <Grid ColumnDefinitions="*,Auto">
+
+                                <Button Grid.Column="0"
+
+                                        Classes="toolbar-btn"
+
+                                        HorizontalAlignment="Stretch"
+
+                                        Content="浏览..."
+
+                                        Command="{Binding PickFolderCommand}"/>
+
+                                <Button Grid.Column="1"
+
+                                        Classes="toolbar-btn primary"
+
+                                        Margin="6,0,0,0"
+
+                                        Content="扫描"
+
+                                        Command="{Binding ScanCommand}"/>
+
+                            </Grid>
+
+                            <CheckBox Content="含子目录"
+
+                                      IsChecked="{Binding ScanRecursive}"/>
+
+                        </StackPanel>
+
+
+
+                        <Border Classes="section-header">
+
+                            <TextBlock Text="编号 / 插卡"/>
+
+                        </Border>
+
+                        <StackPanel Margin="12,10" Spacing="8">
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+
+                                <TextBlock Grid.Column="0"
+
+                                           Text="起始卡号"
+
+                                           VerticalAlignment="Center"
+
+                                           Opacity="0.75"
+
+                                           FontSize="12"/>
+
+                                <NumericUpDown Grid.Column="1"
+
+                                               Minimum="1"
+
+                                               Maximum="999"
+
+                                               Value="{Binding InsertAfterCut}"/>
+
+                            </Grid>
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+
+                                <TextBlock Grid.Column="0"
+
+                                           Text="类型"
+
+                                           VerticalAlignment="Center"
+
+                                           Opacity="0.75"
+
+                                           FontSize="12"/>
+
+                                <ComboBox Grid.Column="1"
+
+                                          ItemsSource="{Binding AvailableAssetTypes}"
+
+                                          SelectedItem="{Binding InsertAssetType}"/>
+
+                            </Grid>
+
+                            <CheckBox Content="插卡时仅未识别文件"
+
+                                      IsChecked="{Binding InsertUnrecognizedOnly}"/>
+
+                            <Button Classes="toolbar-btn primary"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="自动编号（未识别文件）"
+
+                                    Command="{Binding BatchAutoNumberCommand}"/>
+
+                            <Button Classes="toolbar-btn"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="插卡重命名"
+
+                                    Command="{Binding InsertCutCommand}"/>
+
+                        </StackPanel>
+
+
+
+                        <Border Classes="section-header">
+
+                            <TextBlock Text="筛选"/>
+
+                        </Border>
+
+                        <StackPanel Margin="12,10" Spacing="8">
+
+                            <TextBox PlaceholderText="版本标签 (v1 / draft / s)"
+
+                                     Text="{Binding VersionTagFilter}"/>
+
+                            <Button Classes="toolbar-btn"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="应用筛选"
+
+                                    Command="{Binding ApplyVersionFilterCommand}"/>
+
+                        </StackPanel>
+
+                    </StackPanel>
+
+                </ScrollViewer>
+
+            </Border>
+
+
+
+            <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"/>
+
+
+
+            <!-- Center: file list -->
+
+            <Border Grid.Column="2" Classes="workspace-panel">
+
+                <Grid RowDefinitions="Auto,*">
+
+                    <Border Grid.Row="0" Classes="panel-title">
+
+                        <TextBlock Text="{Binding ShotListTitle}"/>
+
+                    </Border>
+
+                    <Grid Grid.Row="1" RowDefinitions="Auto,*">
+
+                        <Grid Grid.Row="0"
+
+                              ColumnDefinitions="90,2*,2*,80,2*"
+
+                              Background="#484848"
+
+                              Height="32">
+
+                            <TextBlock Grid.Column="0" Text="卡号" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                            <TextBlock Grid.Column="1" Text="来源" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                            <TextBlock Grid.Column="2" Text="目标" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                            <TextBlock Grid.Column="3" Text="状态" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                            <TextBlock Grid.Column="4" Text="说明" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                        </Grid>
+
+                        <ListBox Grid.Row="1"
+                                 Classes="shot-list"
+
+                                 ItemsSource="{Binding PreviewItems}"
+
+                                 SelectedItem="{Binding SelectedPreviewRow}"
+
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+                            <ListBox.ItemTemplate>
+
+                                <DataTemplate x:DataType="vm:PreviewRowViewModel">
+
+                                    <Grid ColumnDefinitions="90,2*,2*,80,2*" MinHeight="32">
+
+                                        <TextBlock Grid.Column="0"
+
+                                                   Text="{Binding DisplayCutId}"
+
+                                                   Foreground="#DDDDDD"
+
+                                                   VerticalAlignment="Center"
+
+                                                   Margin="8,4"/>
+
+                                        <TextBlock Grid.Column="1"
+
+                                                   Text="{Binding Source}"
+
+                                                   Foreground="#DDDDDD"
+
+                                                   VerticalAlignment="Center"
+
+                                                   Margin="8,4"
+
+                                                   TextTrimming="CharacterEllipsis"/>
+
+                                        <TextBlock Grid.Column="2"
+
+                                                   Text="{Binding Target}"
+
+                                                   Foreground="#DDDDDD"
+
+                                                   VerticalAlignment="Center"
+
+                                                   Margin="8,4"
+
+                                                   TextTrimming="CharacterEllipsis"/>
+
+                                        <TextBlock Grid.Column="3"
+
+                                                   Text="{Binding Status}"
+
+                                                   Foreground="#DDDDDD"
+
+                                                   VerticalAlignment="Center"
+
+                                                   Margin="8,4"/>
+
+                                        <TextBlock Grid.Column="4"
+
+                                                   Text="{Binding Message}"
+
+                                                   Foreground="#AAAAAA"
+
+                                                   VerticalAlignment="Center"
+
+                                                   Margin="8,4"
+
+                                                   TextTrimming="CharacterEllipsis"/>
+
+                                    </Grid>
+
+                                </DataTemplate>
+
+                            </ListBox.ItemTemplate>
+
+                        </ListBox>
+
+                    </Grid>
+
+                </Grid>
+
+            </Border>
+
+
+
+            <GridSplitter Grid.Column="3" Width="4" ResizeDirection="Columns"/>
+
+
+
+            <!-- Right sidebar: preview -->
+
+            <Border Grid.Column="4" Classes="preview-panel" MinWidth="240">
+
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+                    <Border Grid.Row="0" Classes="panel-title">
+
+                        <TextBlock Text="文件预览"/>
+
+                    </Border>
+
+                    <TextBlock Grid.Row="1"
+
+                               Margin="12,8,12,0"
+
+                               Text="{Binding PreviewCaption}"
+
+                               TextWrapping="Wrap"
+
+                               FontSize="12"
+
+                               Opacity="0.8"/>
+
+                    <Border Grid.Row="2"
+
+                            Margin="12,8"
+
+                            Background="#2B2B2B"
+
+                            CornerRadius="2"
+
+                            BorderBrush="#555555"
+
+                            BorderThickness="1">
+
+                        <Image Source="{Binding PreviewImage}"
+
+                               Stretch="Uniform"
+
+                               Margin="4"
+
+                               HorizontalAlignment="Center"
+
+                               VerticalAlignment="Center"/>
+
+                    </Border>
+
+                    <StackPanel Grid.Row="3" Margin="12,0,12,12" Spacing="6">
+
+                        <Border Classes="section-header" Padding="8,4">
+
+                            <TextBlock Text="卡号画廊" FontSize="11"/>
+
+                        </Border>
+
+                        <TextBlock Text="{Binding GalleryHint}"
+
+                                   FontSize="11"
+
+                                   Opacity="0.6"
+
+                                   TextWrapping="Wrap"
+
+                                   IsVisible="{Binding ShowGalleryHint}"/>
+
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+
+                                      VerticalScrollBarVisibility="Disabled"
+
+                                      MaxHeight="110">
+
+                            <ItemsControl ItemsSource="{Binding CutGallery}">
+
+                                <ItemsControl.ItemsPanel>
+
+                                    <ItemsPanelTemplate>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="6"/>
+
+                                    </ItemsPanelTemplate>
+
+                                </ItemsControl.ItemsPanel>
+
+                                <ItemsControl.ItemTemplate>
+
+                                    <DataTemplate x:DataType="vm:CutGalleryItemViewModel">
+
+                                        <Button Padding="4"
+
+                                                Background="Transparent"
+
+                                                BorderBrush="#555555"
+
+                                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).SelectGalleryCutCommand}"
+
+                                                CommandParameter="{Binding CutId}">
+
+                                            <StackPanel Width="68" Spacing="3">
+
+                                                <Border Background="#2B2B2B"
+
+                                                        BorderBrush="#555555"
+
+                                                        BorderThickness="1"
+
+                                                        Width="64" Height="64">
+
+                                                    <Image Source="{Binding Thumbnail}"
+
+                                                           Stretch="Uniform"
+
+                                                           Margin="2"/>
+
+                                                </Border>
+
+                                                <TextBlock Text="{Binding CutId}"
+
+                                                           FontSize="10"
+
+                                                           HorizontalAlignment="Center"
+
+                                                           TextWrapping="Wrap"
+
+                                                           Opacity="0.85"/>
+
+                                            </StackPanel>
+
+                                        </Button>
+
+                                    </DataTemplate>
+
+                                </ItemsControl.ItemTemplate>
+
+                            </ItemsControl>
+
+                        </ScrollViewer>
+
+                    </StackPanel>
+
+                </Grid>
+
+            </Border>
+
+        </Grid>
+
+
+
+        <!-- Status bar -->
+
+        <Border Grid.Row="3" Classes="status-bar">
+
+            <Grid ColumnDefinitions="*,Auto">
+
+                <TextBlock Grid.Column="0"
+
+                           Text="{Binding StatusMessage}"
+
+                           TextTrimming="CharacterEllipsis"/>
+
+                <TextBlock Grid.Column="1"
+
+                           Margin="16,0,0,0"
+
+                           Text="{Binding MissingCutsSummary}"
+
+                           Foreground="#88BBFF"
+
+                           IsVisible="{Binding MissingCutsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+            </Grid>
+
+        </Border>
+
+    </Grid>
+
+</Window>
+
+

@@ -1,5 +1,6 @@
 namespace CutLab.Application;
 
+using CutLab.Application.Operations.BatchAutoNumberUnrecognized;
 using CutLab.Application.Operations.InsertCut;
 using CutLab.Application.Operations.ExecuteArchive;
 using CutLab.Application.Operations.ExecuteRename;
@@ -28,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<GetScanPreviewHandler>();
         services.AddScoped<ExecuteRenameHandler>();
         services.AddScoped<InsertCutHandler>();
+        services.AddScoped<BatchAutoNumberUnrecognizedHandler>();
         services.AddScoped<ExecuteArchiveHandler>();
         services.AddScoped<UndoLastOperationHandler>();
         services.AddScoped<GetMissingCutsFromSessionHandler>();

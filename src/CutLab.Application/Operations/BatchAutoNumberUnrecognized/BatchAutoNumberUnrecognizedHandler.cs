@@ -1,46 +1,43 @@
-namespace CutLab.Application.Operations.InsertCut;
+namespace CutLab.Application.Operations.BatchAutoNumberUnrecognized;
 
 using CutLab.Application.Common;
 using CutLab.Application.Common.Interfaces;
 using CutLab.Domain.Common;
-using CutLab.Domain.Cuts;
 using CutLab.Domain.Operations;
 using CutLab.Domain.Projects;
 using CutLab.Domain.Scanning;
 using CutLab.Domain.Services;
 using CutLab.Domain.ValueObjects;
 
-public sealed record InsertCutCommand(
+public sealed record BatchAutoNumberUnrecognizedCommand(
     ProjectId ProjectId,
     Guid SessionId,
-    int AfterCut,
-    AssetType AssetType,
-    bool UnrecognizedOnly,
+    int StartCutNumber,
+    AssetType DefaultAssetType,
     bool DryRun);
 
-public sealed record InsertCutResult(
+public sealed record BatchAutoNumberUnrecognizedResult(
     bool DryRun,
-    CutNumber InsertCutNumber,
+    int StartCutNumber,
+    int EndCutNumber,
     int ReadyCount,
     int RenamedCount,
     int SkippedCount,
     Guid? BatchId,
     IReadOnlyList<RenamePlanItem> Items);
 
-public sealed partial class InsertCutHandler
+public sealed partial class BatchAutoNumberUnrecognizedHandler
 {
     private readonly IAnimationProjectRepository _projectRepository;
     private readonly IScanSessionRepository _sessionRepository;
-    private readonly ICutRegistryRepository _registryRepository;
     private readonly IOperationBatchRepository _batchRepository;
     private readonly IFileSystemGateway _fileSystemGateway;
     private readonly INamingService _namingService;
     private readonly IUnitOfWork _unitOfWork;
 
-    public InsertCutHandler(
+    public BatchAutoNumberUnrecognizedHandler(
         IAnimationProjectRepository projectRepository,
         IScanSessionRepository sessionRepository,
-        ICutRegistryRepository registryRepository,
         IOperationBatchRepository batchRepository,
         IFileSystemGateway fileSystemGateway,
         INamingService namingService,
@@ -48,91 +45,74 @@ public sealed partial class InsertCutHandler
     {
         _projectRepository = projectRepository;
         _sessionRepository = sessionRepository;
-        _registryRepository = registryRepository;
         _batchRepository = batchRepository;
         _fileSystemGateway = fileSystemGateway;
         _namingService = namingService;
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<Result<InsertCutResult>> HandleAsync(
-        InsertCutCommand command,
+    public async Task<Result<BatchAutoNumberUnrecognizedResult>> HandleAsync(
+        BatchAutoNumberUnrecognizedCommand command,
         CancellationToken cancellationToken = default)
     {
+        if (command.StartCutNumber < 1)
+        {
+            return Result.Failure<BatchAutoNumberUnrecognizedResult>("起始卡号必须大于 0。");
+        }
+
         var project = await _projectRepository.GetByIdAsync(command.ProjectId, cancellationToken);
         if (project is null)
         {
-            return Result.Failure<InsertCutResult>("项目不存在。");
+            return Result.Failure<BatchAutoNumberUnrecognizedResult>("项目不存在。");
         }
 
         var session = await _sessionRepository.GetByIdAsync(command.SessionId, cancellationToken);
         if (session is null)
         {
-            return Result.Failure<InsertCutResult>("扫描会话不存在。");
+            return Result.Failure<BatchAutoNumberUnrecognizedResult>("扫描会话不存在。");
         }
 
         if (session.ProjectId != command.ProjectId)
         {
-            return Result.Failure<InsertCutResult>("扫描会话与项目不匹配。");
+            return Result.Failure<BatchAutoNumberUnrecognizedResult>("扫描会话与项目不匹配。");
+        }
+
+        var unrecognized = session.GetUnrecognized()
+            .OrderBy(asset => Path.GetFileName(asset.OriginalPath.Value), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (unrecognized.Count == 0)
+        {
+            return Result.Failure<BatchAutoNumberUnrecognizedResult>("没有未识别的文件。");
         }
 
         var (episode, scene) = EpisodeSceneResolver.Resolve(session, project);
-
-        var recognizedCuts = session.GetRecognized()
-            .Where(asset => asset.ParsedCut is not null)
-            .Select(asset => asset.ParsedCut!.Value)
-            .Distinct()
-            .ToList();
-
-        var scopeFrom = recognizedCuts.Count > 0
-            ? recognizedCuts.Min(cut => cut.Cut)
-            : command.AfterCut;
-        var scopeTo = recognizedCuts.Count > 0
-            ? Math.Max(recognizedCuts.Max(cut => cut.Cut), command.AfterCut)
-            : command.AfterCut;
-
-        var scope = new CutScope(
-            new EpisodeNumber(episode),
-            scene,
-            new CutNumber(episode, scene, scopeFrom),
-            new CutNumber(episode, scene, scopeTo));
-
-        var registry = await _registryRepository.GetByProjectAsync(command.ProjectId, scope, cancellationToken)
-                       ?? CutRegistry.Create(command.ProjectId, scope);
-
-        foreach (var cut in recognizedCuts)
-        {
-            registry.RegisterCut(cut);
-        }
-
-        var existingSuffixes = session.Assets
-            .Where(asset => asset.ParsedCut is { } cut
-                            && cut.Episode == episode
-                            && cut.Scene == scene
-                            && cut.Cut == command.AfterCut)
-            .Select(asset => asset.ParsedCut!.Value.InsertSuffix)
-            .Concat(registry.Cuts
-                .Where(cut => cut.CutNumber.Cut == command.AfterCut)
-                .Select(cut => cut.CutNumber.InsertSuffix));
-
-        var insertResult = registry.CreateInsertCut(command.AfterCut, episode, scene, existingSuffixes);
-        if (insertResult.IsFailure)
-        {
-            return Result.Failure<InsertCutResult>(insertResult.Error ?? "无法创建插卡。");
-        }
-
-        var insertCut = insertResult.Value;
-        await _registryRepository.SaveAsync(registry, cancellationToken);
-
         var versionTag = project.DefaultVersionTag;
-        var items = BuildRenameItems(session, project, insertCut, command, versionTag);
+        var items = BuildRenameItems(
+            session,
+            unrecognized,
+            project,
+            episode,
+            scene,
+            command.StartCutNumber,
+            command.DefaultAssetType,
+            versionTag);
+
         var readyItems = items.Where(item => item.Status == RenamePlanStatus.Ready).ToList();
+        var endCut = items
+            .Where(item => item.Status is RenamePlanStatus.Ready or RenamePlanStatus.AlreadyNamed)
+            .Select(item => ExtractCutNumber(item.ProposedFileName.Value))
+            .Where(cut => cut.HasValue)
+            .Select(cut => cut!.Value)
+            .DefaultIfEmpty(command.StartCutNumber)
+            .Max();
 
         if (command.DryRun)
         {
-            return Result.Success(new InsertCutResult(
+            return Result.Success(new BatchAutoNumberUnrecognizedResult(
                 true,
-                insertCut,
+                command.StartCutNumber,
+                endCut,
                 readyItems.Count,
                 0,
                 items.Count - readyItems.Count,
@@ -142,7 +122,7 @@ public sealed partial class InsertCutHandler
 
         if (readyItems.Count == 0)
         {
-            return Result.Failure<InsertCutResult>("没有可重命名的文件。");
+            return Result.Failure<BatchAutoNumberUnrecognizedResult>("没有可重命名的文件。");
         }
 
         var batch = OperationBatch.Create(command.ProjectId, BatchOperationType.Rename);
@@ -156,16 +136,18 @@ public sealed partial class InsertCutHandler
         var completeResult = batch.Complete();
         if (completeResult.IsFailure)
         {
-            return Result.Failure<InsertCutResult>(completeResult.Error ?? "插卡重命名未完成。");
+            return Result.Failure<BatchAutoNumberUnrecognizedResult>(
+                completeResult.Error ?? "自动编号重命名未完成。");
         }
 
         await _batchRepository.SaveAsync(batch, cancellationToken);
         await _unitOfWork.CommitAsync(cancellationToken);
 
         var renamedCount = batch.GetSuccessfulEntries().Count;
-        return Result.Success(new InsertCutResult(
+        return Result.Success(new BatchAutoNumberUnrecognizedResult(
             false,
-            insertCut,
+            command.StartCutNumber,
+            endCut,
             readyItems.Count,
             renamedCount,
             items.Count - renamedCount,
@@ -173,40 +155,43 @@ public sealed partial class InsertCutHandler
             items));
     }
 
-    private static (int Episode, int Scene) ResolveEpisodeScene(ScanSession session, AnimationProject project) =>
-        EpisodeSceneResolver.Resolve(session, project);
-
     private List<RenamePlanItem> BuildRenameItems(
         ScanSession session,
+        IReadOnlyList<ProductionAsset> unrecognized,
         AnimationProject project,
-        CutNumber insertCut,
-        InsertCutCommand command,
+        int episode,
+        int scene,
+        int startCutNumber,
+        AssetType defaultAssetType,
         VersionTag? versionTag)
     {
         var items = new List<RenamePlanItem>();
         var targetPaths = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var occupiedCuts = session.GetRecognized()
+            .Where(asset => asset.ParsedCut is { } cut
+                            && cut.Episode == episode
+                            && cut.Scene == scene)
+            .Select(asset => asset.ParsedCut!.Value.Cut)
+            .ToHashSet();
+        var nextCut = startCutNumber;
 
-        foreach (var asset in session.Assets)
+        foreach (var asset in unrecognized)
         {
-            if (command.UnrecognizedOnly && asset.RecognitionStatus != RecognitionStatus.Unrecognized)
+            while (occupiedCuts.Contains(nextCut))
             {
-                continue;
+                nextCut++;
             }
 
-            if (!command.UnrecognizedOnly
-                && asset.RecognitionStatus == RecognitionStatus.Recognized
-                && asset.ParsedCut is not null
-                && asset.ParsedCut.Value.Cut != command.AfterCut)
-            {
-                continue;
-            }
+            var assignedCut = new CutNumber(episode, scene, nextCut);
+            occupiedCuts.Add(nextCut);
+            nextCut++;
 
-            var assetType = asset.AssetType ?? command.AssetType;
+            var assetType = asset.AssetType ?? defaultAssetType;
             var extension = Path.GetExtension(asset.OriginalPath.Value);
             var effectiveVersionTag = asset.VersionTag ?? versionTag;
             var naming = _namingService.GenerateFileName(
                 project.NamingConvention,
-                insertCut,
+                assignedCut,
                 assetType,
                 extension,
                 effectiveVersionTag);
@@ -235,7 +220,7 @@ public sealed partial class InsertCutHandler
                     targetPath,
                     naming.Value,
                     RenamePlanStatus.AlreadyNamed,
-                    "已是插卡命名。"));
+                    "已是规范命名。"));
                 continue;
             }
 
@@ -263,4 +248,13 @@ public sealed partial class InsertCutHandler
 
         return items;
     }
+
+    private static int? ExtractCutNumber(string fileName)
+    {
+        var match = CutTokenPattern().Match(Path.GetFileNameWithoutExtension(fileName));
+        return match.Success ? int.Parse(match.Groups["cut"].Value) : null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"C(?<cut>\d{3})")]
+    private static partial System.Text.RegularExpressions.Regex CutTokenPattern();
 }
