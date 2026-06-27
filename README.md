@@ -33,7 +33,6 @@ dotnet run --project src/CutLab.App
 
 ## 文档
 
-- [项目规划](docs/PROJECT_PLAN.md)
 - [架构设计](docs/ARCHITECTURE.md)
 - [安装与打包](docs/INSTALL.md)
-- [开发进度](docs/PROGRESS.md)
+- [命名规则](docs/NAMING_RULE_SPEC.md)

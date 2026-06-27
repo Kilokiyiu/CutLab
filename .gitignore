@@ -7,3 +7,7 @@ obj/
 TestResults/
 publish/
 dist/
+
+# Internal planning docs (local only, not published)
+docs/PROJECT_PLAN.md
+docs/PROGRESS.md
