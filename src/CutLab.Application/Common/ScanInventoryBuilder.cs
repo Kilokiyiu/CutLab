@@ -6,6 +6,7 @@ using CutLab.Domain.ValueObjects;
 public sealed record ScanInventoryItem(
     Guid AssetId,
     string CutId,
+    CutNumber? ParsedCut,
     FilePath SourcePath,
     string TargetDisplay,
     string Status,
@@ -31,6 +32,7 @@ public static class ScanInventoryBuilder
                 inventory.Add(new ScanInventoryItem(
                     asset.Id,
                     cutId,
+                    asset.ParsedCut,
                     asset.OriginalPath,
                     renameItem.ProposedFileName.Value,
                     renameItem.Status.ToString(),
@@ -43,6 +45,7 @@ public static class ScanInventoryBuilder
                 inventory.Add(new ScanInventoryItem(
                     asset.Id,
                     cutId,
+                    asset.ParsedCut,
                     asset.OriginalPath,
                     "—",
                     "Unrecognized",
@@ -53,6 +56,7 @@ public static class ScanInventoryBuilder
             inventory.Add(new ScanInventoryItem(
                 asset.Id,
                 cutId,
+                asset.ParsedCut,
                 asset.OriginalPath,
                 asset.ProposedFileName?.Value ?? "—",
                 "Skipped",

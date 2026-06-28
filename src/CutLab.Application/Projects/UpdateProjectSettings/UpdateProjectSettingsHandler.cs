@@ -1,5 +1,6 @@
 namespace CutLab.Application.Projects.UpdateProjectSettings;
 
+using CutLab.Application.Common;
 using CutLab.Application.Common.Interfaces;
 using CutLab.Domain.Common;
 using CutLab.Domain.Projects;
@@ -13,7 +14,8 @@ public sealed record UpdateProjectSettingsCommand(
     string ArchivePathPattern,
     string ArchiveFoldersText,
     string RootPath,
-    string DefaultVersionTag);
+    string DefaultVersionTag,
+    string RecognitionPatternsText);
 
 public sealed class UpdateProjectSettingsHandler
 {
@@ -72,6 +74,8 @@ public sealed class UpdateProjectSettingsHandler
         {
             return versionResult;
         }
+
+        project.UpdateRecognitionPatterns(RecognitionPatternParser.Parse(command.RecognitionPatternsText));
 
         await _repository.SaveAsync(project, cancellationToken);
         await _unitOfWork.CommitAsync(cancellationToken);

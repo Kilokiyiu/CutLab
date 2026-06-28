@@ -15,47 +15,115 @@ public sealed partial class RegexRecognitionService : IRecognitionService
 
         if (StandardCutPattern().Match(nameWithoutExtension) is { Success: true } standardMatch)
         {
-            var episode = int.Parse(standardMatch.Groups["ep"].Value);
-            var scene = int.Parse(standardMatch.Groups["sc"].Value);
-            var cut = int.Parse(standardMatch.Groups["cut"].Value);
-            var insert = string.IsNullOrEmpty(standardMatch.Groups["insert"].Value)
-                ? null
-                : standardMatch.Groups["insert"].Value;
-            var typeText = standardMatch.Groups["type"].Value;
-            var versionTag = ParseVersionGroup(standardMatch);
-            return BuildResult(episode, scene, cut, insert, typeText, versionTag);
+            return ParseStandardMatch(standardMatch);
         }
 
         if (SimpleCutPattern().Match(nameWithoutExtension) is { Success: true } simpleMatch)
         {
-            var cut = int.Parse(simpleMatch.Groups["cut"].Value);
-            var insert = string.IsNullOrEmpty(simpleMatch.Groups["insert"].Value)
-                ? null
-                : simpleMatch.Groups["insert"].Value;
-            var typeText = simpleMatch.Groups["type"].Value;
-            var versionTag = ParseVersionGroup(simpleMatch);
-            return BuildResult(defaultConvention, cut, insert, typeText, versionTag);
+            return ParseSimpleMatch(simpleMatch, defaultConvention);
         }
 
         if (ChineseCardPattern().Match(nameWithoutExtension) is { Success: true } chineseMatch)
         {
-            var cut = int.Parse(chineseMatch.Groups["cut"].Value);
-            var typeText = chineseMatch.Groups["type"].Value;
-            return BuildResult(defaultConvention, cut, null, typeText, null);
+            return ParseChineseMatch(chineseMatch, defaultConvention);
         }
 
         if (OrdinalCardPattern().Match(nameWithoutExtension) is { Success: true } ordinalMatch)
         {
-            var cut = int.Parse(ordinalMatch.Groups["cut"].Value);
-            return new RecognitionResult(
-                new CutNumber(1, 1, cut),
-                null,
-                RecognitionStatus.Unrecognized,
-                "已识别卡号，但缺少资产类型。",
-                null);
+            return ParseOrdinalMatch(ordinalMatch);
+        }
+
+        foreach (var pattern in patterns)
+        {
+            if (string.IsNullOrWhiteSpace(pattern.Pattern))
+            {
+                continue;
+            }
+
+            var regex = RecognitionPatternCompiler.TryCompile(pattern.Pattern);
+            if (regex?.Match(nameWithoutExtension) is not { Success: true } customMatch)
+            {
+                continue;
+            }
+
+            return ParseCustomMatch(customMatch, defaultConvention);
         }
 
         return new RecognitionResult(null, null, RecognitionStatus.Unrecognized, "未匹配任何识别规则。");
+    }
+
+    private static RecognitionResult ParseStandardMatch(Match match)
+    {
+        var episode = int.Parse(match.Groups["ep"].Value);
+        var scene = int.Parse(match.Groups["sc"].Value);
+        var cut = int.Parse(match.Groups["cut"].Value);
+        var insert = string.IsNullOrEmpty(match.Groups["insert"].Value)
+            ? null
+            : match.Groups["insert"].Value;
+        var typeText = match.Groups["type"].Value;
+        var versionTag = ParseVersionGroup(match);
+        return BuildResult(episode, scene, cut, insert, typeText, versionTag);
+    }
+
+    private static RecognitionResult ParseSimpleMatch(Match match, NamingConvention defaultConvention)
+    {
+        var cut = int.Parse(match.Groups["cut"].Value);
+        var insert = string.IsNullOrEmpty(match.Groups["insert"].Value)
+            ? null
+            : match.Groups["insert"].Value;
+        var typeText = match.Groups["type"].Value;
+        var versionTag = ParseVersionGroup(match);
+        return BuildResult(defaultConvention, cut, insert, typeText, versionTag);
+    }
+
+    private static RecognitionResult ParseChineseMatch(Match match, NamingConvention defaultConvention)
+    {
+        var cut = int.Parse(match.Groups["cut"].Value);
+        var typeText = match.Groups["type"].Value;
+        return BuildResult(defaultConvention, cut, null, typeText, null);
+    }
+
+    private static RecognitionResult ParseOrdinalMatch(Match match)
+    {
+        var cut = int.Parse(match.Groups["cut"].Value);
+        return new RecognitionResult(
+            new CutNumber(1, 1, cut),
+            null,
+            RecognitionStatus.Unrecognized,
+            "已识别卡号，但缺少资产类型。",
+            null);
+    }
+
+    private static RecognitionResult ParseCustomMatch(Match match, NamingConvention defaultConvention)
+    {
+        if (!match.Groups["cut"].Success)
+        {
+            return new RecognitionResult(null, null, RecognitionStatus.Unrecognized, "自定义规则未识别卡号。");
+        }
+
+        var episode = match.Groups["ep"].Success
+            ? int.Parse(match.Groups["ep"].Value)
+            : ExtractEpisode(defaultConvention);
+        var scene = match.Groups["sc"].Success
+            ? int.Parse(match.Groups["sc"].Value)
+            : ExtractScene(defaultConvention);
+        var cut = int.Parse(match.Groups["cut"].Value);
+        var insert = match.Groups["insert"].Success && !string.IsNullOrEmpty(match.Groups["insert"].Value)
+            ? match.Groups["insert"].Value
+            : null;
+        var versionTag = ParseVersionGroup(match);
+
+        if (!match.Groups["type"].Success)
+        {
+            return new RecognitionResult(
+                new CutNumber(episode, scene, cut, insert),
+                null,
+                RecognitionStatus.Unrecognized,
+                "已识别卡号，但缺少资产类型。",
+                versionTag);
+        }
+
+        return BuildResult(episode, scene, cut, insert, match.Groups["type"].Value, versionTag);
     }
 
     private static VersionTag? ParseVersionGroup(Match match) =>

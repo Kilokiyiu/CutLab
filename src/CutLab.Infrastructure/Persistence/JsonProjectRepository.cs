@@ -38,6 +38,19 @@ internal sealed class JsonProjectRepository : IAnimationProjectRepository
         await JsonSerializer.SerializeAsync(stream, AnimationProjectDto.FromDomain(project), JsonOptions, cancellationToken);
     }
 
+    public Task DeleteAsync(ProjectId id, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var path = GetPath(id);
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public async Task<IReadOnlyList<AnimationProject>> ListRecentAsync(int count, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(_storeDirectory))
@@ -80,6 +93,8 @@ internal sealed class AnimationProjectDto
 
     public List<string> ArchiveFolders { get; set; } = ["分镜", "原画", "动画", "背景", "渲染"];
 
+    public List<string> RecognitionPatterns { get; set; } = [];
+
     public string RootPath { get; set; } = string.Empty;
 
     public string? DefaultVersionTag { get; set; }
@@ -97,6 +112,7 @@ internal sealed class AnimationProjectDto
             NamingTemplate = project.NamingConvention.Template,
             ArchivePathPattern = project.ArchiveTemplate.PathPattern,
             ArchiveFolders = project.ArchiveTemplate.FolderNames.ToList(),
+            RecognitionPatterns = project.RecognitionPatterns.Select(pattern => pattern.Pattern).ToList(),
             RootPath = project.RootPath.Value,
             DefaultVersionTag = project.DefaultVersionTag?.Value,
             CreatedAt = project.CreatedAt,
@@ -123,7 +139,10 @@ internal sealed class AnimationProjectDto
             naming.Value,
             archive.Value,
             new WorkspacePath(RootPath),
-            [],
+            RecognitionPatterns
+                .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
+                .Select(pattern => new RecognitionPattern(pattern.Trim()))
+                .ToList(),
             CreatedAt == default ? DateTimeOffset.UtcNow : CreatedAt,
             UpdatedAt == default ? DateTimeOffset.UtcNow : UpdatedAt,
             string.IsNullOrWhiteSpace(DefaultVersionTag)

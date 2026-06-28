@@ -6,5 +6,7 @@ public interface IAnimationProjectRepository
 
     Task SaveAsync(AnimationProject project, CancellationToken cancellationToken = default);
 
+    Task DeleteAsync(ProjectId id, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AnimationProject>> ListRecentAsync(int count, CancellationToken cancellationToken = default);
 }

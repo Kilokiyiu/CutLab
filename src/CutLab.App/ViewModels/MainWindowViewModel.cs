@@ -13,19 +13,24 @@ using CutLab.Application.Operations.BatchAutoNumberUnrecognized;
 using CutLab.Application.Operations.ExecuteArchive;
 using CutLab.Application.Operations.ExecuteRename;
 using CutLab.Application.Operations.InsertCut;
+using CutLab.Application.Operations.ReorderCuts;
 using CutLab.Application.Operations.UndoLastOperation;
 using CutLab.Application.Projects.GetProject;
+using CutLab.Application.Projects.ProjectConfig;
 using CutLab.Application.Projects.CreateProject;
 using CutLab.Application.Projects.ListRecentProjects;
 using CutLab.Application.Reporting.ExportCutList;
 using CutLab.Application.Reporting.ExportProgressReport;
 using CutLab.Application.Reporting.GeneratePreviewVideo;
+using CutLab.Application.Reporting.ExportMissingCuts;
 using CutLab.Application.Reporting.GetMissingCutsFromSession;
+using CutLab.Application.Projects.DeleteProject;
 using CutLab.Application.Scanning.GetScanPreview;
 using CutLab.Application.Scanning.ScanFolder;
 using CutLab.Domain.Projects;
 using CutLab.Domain.ValueObjects;
 using Avalonia.Media.Imaging;
+using Avalonia.Controls;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
@@ -42,9 +47,15 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly UndoLastOperationHandler _undoLastOperationHandler;
     private readonly InsertCutHandler _insertCutHandler;
     private readonly BatchAutoNumberUnrecognizedHandler _batchAutoNumberHandler;
+    private readonly ReorderCutsHandler _reorderCutsHandler;
     private readonly GeneratePreviewVideoHandler _generatePreviewVideoHandler;
     private readonly ExportProgressReportHandler _exportProgressReportHandler;
     private readonly GetProjectHandler _getProjectHandler;
+    private readonly ExportProjectConfigHandler _exportProjectConfigHandler;
+    private readonly ImportProjectConfigHandler _importProjectConfigHandler;
+    private readonly ExportMissingCutsHandler _exportMissingCutsHandler;
+    private readonly DeleteProjectHandler _deleteProjectHandler;
+    private readonly IUserPreferencesStore _userPreferencesStore;
 
     private ProjectId? _currentProjectId;
     private Guid? _currentSessionId;
@@ -64,9 +75,15 @@ public partial class MainWindowViewModel : ViewModelBase
         UndoLastOperationHandler undoLastOperationHandler,
         InsertCutHandler insertCutHandler,
         BatchAutoNumberUnrecognizedHandler batchAutoNumberHandler,
+        ReorderCutsHandler reorderCutsHandler,
         GeneratePreviewVideoHandler generatePreviewVideoHandler,
         ExportProgressReportHandler exportProgressReportHandler,
-        GetProjectHandler getProjectHandler)
+        GetProjectHandler getProjectHandler,
+        ExportProjectConfigHandler exportProjectConfigHandler,
+        ImportProjectConfigHandler importProjectConfigHandler,
+        ExportMissingCutsHandler exportMissingCutsHandler,
+        DeleteProjectHandler deleteProjectHandler,
+        IUserPreferencesStore userPreferencesStore)
     {
         _fileDialogService = fileDialogService;
         _windowService = windowService;
@@ -81,9 +98,22 @@ public partial class MainWindowViewModel : ViewModelBase
         _undoLastOperationHandler = undoLastOperationHandler;
         _insertCutHandler = insertCutHandler;
         _batchAutoNumberHandler = batchAutoNumberHandler;
+        _reorderCutsHandler = reorderCutsHandler;
         _generatePreviewVideoHandler = generatePreviewVideoHandler;
         _exportProgressReportHandler = exportProgressReportHandler;
         _getProjectHandler = getProjectHandler;
+        _exportProjectConfigHandler = exportProjectConfigHandler;
+        _importProjectConfigHandler = importProjectConfigHandler;
+        _exportMissingCutsHandler = exportMissingCutsHandler;
+        _deleteProjectHandler = deleteProjectHandler;
+        _userPreferencesStore = userPreferencesStore;
+
+        var columnPreferences = _userPreferencesStore.Load();
+        _shotColCutWidth = new GridLength(Math.Max(48, columnPreferences.ShotColCutWidth));
+        _shotColSourceWidth = new GridLength(Math.Max(64, columnPreferences.ShotColSourceWidth));
+        _shotColTargetWidth = new GridLength(Math.Max(64, columnPreferences.ShotColTargetWidth));
+        _shotColStatusWidth = new GridLength(Math.Max(48, columnPreferences.ShotColStatusWidth));
+
         PreviewItems = [];
         PreviewItems.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShotListTitle));
         RecentProjects = [];
@@ -103,6 +133,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private int _insertAfterCut = 1;
+
+    [ObservableProperty]
+    private int _missingCutFrom;
+
+    [ObservableProperty]
+    private int _missingCutTo;
 
     [ObservableProperty]
     private AssetType _insertAssetType = AssetType.Keyframe;
@@ -140,6 +176,43 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _showGalleryHint;
 
+    [ObservableProperty]
+    private bool _isReorderDragging;
+
+    [ObservableProperty]
+    private string _reorderDragHint = string.Empty;
+
+    [ObservableProperty]
+    private GridLength _shotColCutWidth = new(90);
+
+    [ObservableProperty]
+    private GridLength _shotColSourceWidth = new(200);
+
+    [ObservableProperty]
+    private GridLength _shotColTargetWidth = new(200);
+
+    [ObservableProperty]
+    private GridLength _shotColStatusWidth = new(80);
+
+    public void PersistColumnWidths()
+    {
+        _userPreferencesStore.Save(new UserPreferences
+        {
+            ShotColCutWidth = ShotColCutWidth.Value,
+            ShotColSourceWidth = ShotColSourceWidth.Value,
+            ShotColTargetWidth = ShotColTargetWidth.Value,
+            ShotColStatusWidth = ShotColStatusWidth.Value
+        });
+    }
+
+    partial void OnShotColCutWidthChanged(GridLength value) => PersistColumnWidths();
+
+    partial void OnShotColSourceWidthChanged(GridLength value) => PersistColumnWidths();
+
+    partial void OnShotColTargetWidthChanged(GridLength value) => PersistColumnWidths();
+
+    partial void OnShotColStatusWidthChanged(GridLength value) => PersistColumnWidths();
+
     public ObservableCollection<PreviewRowViewModel> PreviewItems { get; }
 
     public ObservableCollection<ProjectListItemViewModel> RecentProjects { get; }
@@ -147,7 +220,153 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<CutGalleryItemViewModel> CutGallery { get; }
 
     public string ShotListTitle =>
-        PreviewItems.Count == 0 ? "镜头清单" : $"镜头清单（{PreviewItems.Count}）";
+        PreviewItems.Count == 0
+            ? "镜头清单"
+            : $"镜头清单（{PreviewItems.Count}）· 拖拽行调整卡号顺序";
+
+    public async Task ReorderCutAsync(int movedCut, int targetIndexInOriginal)
+    {
+        if (_currentProjectId is null || _currentSessionId is null || IsBusy)
+        {
+            return;
+        }
+
+        var targetIndex = AdjustReorderTargetIndex(movedCut, targetIndexInOriginal);
+        if (!WouldReorderChange(movedCut, targetIndexInOriginal))
+        {
+            return;
+        }
+
+        await RunOperationAsync($"正在调整卡号 C{movedCut:D3}...", async () =>
+        {
+            var preview = await _reorderCutsHandler.HandleAsync(new ReorderCutsCommand(
+                _currentProjectId.Value,
+                _currentSessionId.Value,
+                movedCut,
+                targetIndex,
+                DryRun: true));
+
+            if (preview.IsFailure || preview.Value is null)
+            {
+                return preview.Error ?? "卡号重排预览失败。";
+            }
+
+            PreviewItems.Clear();
+            foreach (var item in preview.Value.Items)
+            {
+                PreviewItems.Add(PreviewRowViewModel.FromRename(item));
+            }
+
+            if (preview.Value.ReadyCount == 0)
+            {
+                return "卡号顺序未发生变化。";
+            }
+
+            var result = await _reorderCutsHandler.HandleAsync(new ReorderCutsCommand(
+                _currentProjectId.Value,
+                _currentSessionId.Value,
+                movedCut,
+                targetIndex,
+                DryRun: false));
+
+            if (result.IsFailure || result.Value is null)
+            {
+                return result.Error ?? "卡号重排失败。";
+            }
+
+            await RescanAsync();
+            return $"卡号重排完成：重命名 {result.Value.RenamedCount} 个文件。";
+        });
+    }
+
+    public int GetTargetIndexForCut(int targetCut)
+    {
+        var orderedCuts = GetOrderedCuts().ToList();
+        var index = orderedCuts.IndexOf(targetCut);
+        return index < 0 ? orderedCuts.Count : index;
+    }
+
+    public int AdjustReorderTargetIndex(int movedCut, int targetIndexInOriginal)
+    {
+        var orderedCuts = GetOrderedCuts().ToList();
+        var fromIndex = orderedCuts.IndexOf(movedCut);
+        if (fromIndex < 0)
+        {
+            return targetIndexInOriginal;
+        }
+
+        return fromIndex < targetIndexInOriginal
+            ? targetIndexInOriginal - 1
+            : targetIndexInOriginal;
+    }
+
+    public bool WouldReorderChange(int movedCut, int targetIndexInOriginal)
+    {
+        var original = GetOrderedCuts();
+        var orderedCuts = original.ToList();
+        var fromIndex = orderedCuts.IndexOf(movedCut);
+        if (fromIndex < 0)
+        {
+            return false;
+        }
+
+        var targetIndex = AdjustReorderTargetIndex(movedCut, targetIndexInOriginal);
+        orderedCuts.RemoveAt(fromIndex);
+        targetIndex = Math.Clamp(targetIndex, 0, orderedCuts.Count);
+        orderedCuts.Insert(targetIndex, movedCut);
+        return !orderedCuts.SequenceEqual(original);
+    }
+
+    public string BuildReorderDragHint(int movedCut, int targetIndexInOriginal, bool insertAfter, int? anchorCut)
+    {
+        var original = GetOrderedCuts();
+        if (original.Count == 0 || !original.Contains(movedCut))
+        {
+            return string.Empty;
+        }
+
+        if (!WouldReorderChange(movedCut, targetIndexInOriginal))
+        {
+            return "松开后顺序不变";
+        }
+
+        var orderedCuts = original.ToList();
+        var fromIndex = orderedCuts.IndexOf(movedCut);
+        var targetIndex = AdjustReorderTargetIndex(movedCut, targetIndexInOriginal);
+        orderedCuts.RemoveAt(fromIndex);
+        targetIndex = Math.Clamp(targetIndex, 0, orderedCuts.Count);
+        orderedCuts.Insert(targetIndex, movedCut);
+
+        var startCut = original.Min();
+        var newCutNumber = startCut + targetIndex;
+        var positionText = anchorCut is int cut
+            ? insertAfter
+                ? $"插入到 C{cut:D3} 之后"
+                : $"插入到 C{cut:D3} 之前"
+            : "移动到末尾";
+
+        return $"松开应用：C{movedCut:D3} → C{newCutNumber:D3}（{positionText}）";
+    }
+
+    public void UpdateReorderDragPreview(int movedCut, int targetIndexInOriginal, bool insertAfter, int? anchorCut)
+    {
+        IsReorderDragging = true;
+        ReorderDragHint = BuildReorderDragHint(movedCut, targetIndexInOriginal, insertAfter, anchorCut);
+    }
+
+    public void ClearReorderDragPreview()
+    {
+        IsReorderDragging = false;
+        ReorderDragHint = string.Empty;
+    }
+
+    private IReadOnlyList<int> GetOrderedCuts() =>
+        PreviewItems
+            .Where(row => row.ReorderCut.HasValue)
+            .Select(row => row.ReorderCut!.Value)
+            .Distinct()
+            .OrderBy(cut => cut)
+            .ToList();
 
     public AssetType[] AvailableAssetTypes { get; } = Enum.GetValues<AssetType>();
 
@@ -306,6 +525,124 @@ public partial class MainWindowViewModel : ViewModelBase
         _currentProjectId = projectId;
         var saved = await _windowService.ShowProjectSettingsAsync(projectId.Value);
         StatusMessage = saved ? "项目设置已保存。" : "项目设置未更改。";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageProjectConfig))]
+    private async Task ExportProjectConfigAsync()
+    {
+        var projectId = await EnsureProjectAsync();
+        if (projectId is null)
+        {
+            StatusMessage = "请先创建或加载项目。";
+            return;
+        }
+
+        _currentProjectId = projectId;
+        var project = await _getProjectHandler.HandleAsync(new GetProjectQuery(projectId.Value));
+        var suggestedName = project.IsSuccess && project.Value is not null
+            ? $"{SanitizeFileName(project.Value.Name)}.cutlab.json"
+            : "CutLab-Project.cutlab.json";
+
+        var outputPath = await _fileDialogService.SaveProjectConfigFileAsync(suggestedName);
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            StatusMessage = "正在导出项目配置...";
+
+            var result = await _exportProjectConfigHandler.HandleAsync(new ExportProjectConfigCommand(
+                projectId.Value,
+                outputPath,
+                IncludeRootPath: true));
+
+            StatusMessage = result.IsSuccess
+                ? $"已导出项目配置：{outputPath}"
+                : result.Error ?? "导出项目配置失败。";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"导出项目配置出错：{ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            NotifyCommandsChanged();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanImportProjectConfig))]
+    private async Task ImportProjectConfigAsync()
+    {
+        var inputPath = await _fileDialogService.OpenProjectConfigFileAsync();
+        if (string.IsNullOrWhiteSpace(inputPath))
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            StatusMessage = "正在导入项目配置...";
+
+            var fallbackRoot = string.IsNullOrWhiteSpace(SourcePath)
+                ? null
+                : Path.GetDirectoryName(SourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                  ?? SourcePath;
+
+            var result = await _importProjectConfigHandler.HandleAsync(new ImportProjectConfigCommand(
+                inputPath,
+                _currentProjectId,
+                fallbackRoot));
+
+            if (result.IsFailure || result.Value is null)
+            {
+                StatusMessage = result.Error ?? "导入项目配置失败。";
+                return;
+            }
+
+            _currentProjectId = result.Value.ProjectId;
+            _currentSessionId = null;
+            PreviewItems.Clear();
+            CutGallery.Clear();
+            SelectedPreviewRow = null;
+            MissingCutsSummary = string.Empty;
+
+            await RefreshRecentProjectsAsync();
+            SelectedProject = RecentProjects.FirstOrDefault(project => project.Id == result.Value.ProjectId);
+
+            var projectDetails = await _getProjectHandler.HandleAsync(new GetProjectQuery(result.Value.ProjectId));
+            if (projectDetails.IsSuccess && projectDetails.Value is not null && !string.IsNullOrWhiteSpace(projectDetails.Value.RootPath))
+            {
+                SourcePath = projectDetails.Value.RootPath;
+            }
+
+            StatusMessage = result.Value.CreatedNew
+                ? $"已导入并新建项目：{result.Value.ProjectName}"
+                : $"已导入项目配置到当前项目：{result.Value.ProjectName}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"导入项目配置出错：{ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            NotifyCommandsChanged();
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+        {
+            name = name.Replace(invalid, '_');
+        }
+
+        return string.IsNullOrWhiteSpace(name) ? "CutLab-Project" : name.Trim();
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -585,6 +922,106 @@ public partial class MainWindowViewModel : ViewModelBase
         await LoadMissingCutsAsync(showFailureAsStatus: true);
     }
 
+    [RelayCommand(CanExecute = nameof(CanExportMissingCuts))]
+    private async Task ExportMissingCutsAsync()
+    {
+        if (_currentProjectId is null || _currentSessionId is null)
+        {
+            return;
+        }
+
+        var outputPath = await _fileDialogService.SaveMissingCutsFileAsync("CutLab_缺卡清单.csv");
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            StatusMessage = "正在导出缺卡清单...";
+
+            var result = await _exportMissingCutsHandler.HandleAsync(new ExportMissingCutsCommand(
+                _currentProjectId.Value,
+                _currentSessionId.Value,
+                outputPath,
+                ResolveMissingCutScope(MissingCutFrom),
+                ResolveMissingCutScope(MissingCutTo)));
+
+            StatusMessage = result.IsSuccess
+                ? $"已导出缺卡清单（{result.Value!.RowCount} 项）到 {outputPath}"
+                : result.Error ?? "导出缺卡清单失败。";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"导出缺卡清单出错：{ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            NotifyCommandsChanged();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDeleteProject))]
+    private async Task DeleteProjectAsync()
+    {
+        if (_currentProjectId is null)
+        {
+            return;
+        }
+
+        var projectName = SelectedProject?.Name ?? "当前项目";
+        var confirmed = await _windowService.ConfirmAsync(
+            "删除项目",
+            $"确定删除 CutLab 项目「{projectName}」吗？\n\n仅删除项目配置，不会删除磁盘上的素材文件。");
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            var deletingId = _currentProjectId.Value;
+            var result = await _deleteProjectHandler.HandleAsync(new DeleteProjectCommand(deletingId));
+            if (result.IsFailure)
+            {
+                StatusMessage = result.Error ?? "删除项目失败。";
+                return;
+            }
+
+            _currentProjectId = null;
+            _currentSessionId = null;
+            PreviewItems.Clear();
+            CutGallery.Clear();
+            SelectedPreviewRow = null;
+            MissingCutsSummary = string.Empty;
+
+            await RefreshRecentProjectsAsync();
+            if (RecentProjects.Count > 0)
+            {
+                await ApplyProjectSwitchAsync(RecentProjects[0], updateSelection: true);
+                StatusMessage = $"已删除项目「{projectName}」，已切换到 {RecentProjects[0].Name}。";
+            }
+            else
+            {
+                SourcePath = string.Empty;
+                StatusMessage = $"已删除项目「{projectName}」。";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"删除项目出错：{ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            NotifyCommandsChanged();
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanUndo))]
     private async Task UndoAsync()
     {
@@ -841,7 +1278,11 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         var result = await _getMissingCutsFromSessionHandler.HandleAsync(
-            new GetMissingCutsFromSessionQuery(_currentProjectId.Value, _currentSessionId.Value));
+            new GetMissingCutsFromSessionQuery(
+                _currentProjectId.Value,
+                _currentSessionId.Value,
+                ResolveMissingCutScope(MissingCutFrom),
+                ResolveMissingCutScope(MissingCutTo)));
 
         if (result.IsFailure || result.Value is null)
         {
@@ -874,11 +1315,17 @@ public partial class MainWindowViewModel : ViewModelBase
         MissingCutsSummary = string.Join("；", parts);
     }
 
+    private static int? ResolveMissingCutScope(int value) => value > 0 ? value : null;
+
     private bool CanPickFolder() => !IsBusy;
 
     private bool CanScan() => !IsBusy && !string.IsNullOrWhiteSpace(SourcePath);
 
     private bool CanOpenSettings() => !IsBusy && !string.IsNullOrWhiteSpace(SourcePath);
+
+    private bool CanManageProjectConfig() => !IsBusy && !string.IsNullOrWhiteSpace(SourcePath);
+
+    private bool CanImportProjectConfig() => !IsBusy;
 
     private bool CanExport() => !IsBusy && _currentSessionId is not null;
 
@@ -887,6 +1334,10 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanExecuteArchive() => !IsBusy && _currentSessionId is not null;
 
     private bool CanDetectMissingCuts() => !IsBusy && _currentSessionId is not null;
+
+    private bool CanExportMissingCuts() => !IsBusy && _currentSessionId is not null;
+
+    private bool CanDeleteProject() => !IsBusy && _currentProjectId is not null;
 
     private bool CanUndo() => !IsBusy && _currentProjectId is not null;
 
@@ -907,10 +1358,14 @@ public partial class MainWindowViewModel : ViewModelBase
         OpenSettingsCommand.NotifyCanExecuteChanged();
         ExportCutListCommand.NotifyCanExecuteChanged();
         ExportProgressReportCommand.NotifyCanExecuteChanged();
+        ExportProjectConfigCommand.NotifyCanExecuteChanged();
+        ImportProjectConfigCommand.NotifyCanExecuteChanged();
         ExecuteRenameCommand.NotifyCanExecuteChanged();
         CreateArchiveDirectoriesCommand.NotifyCanExecuteChanged();
         MoveToArchiveCommand.NotifyCanExecuteChanged();
         DetectMissingCutsCommand.NotifyCanExecuteChanged();
+        ExportMissingCutsCommand.NotifyCanExecuteChanged();
+        DeleteProjectCommand.NotifyCanExecuteChanged();
         InsertCutCommand.NotifyCanExecuteChanged();
         BatchAutoNumberCommand.NotifyCanExecuteChanged();
         GeneratePreviewVideoCommand.NotifyCanExecuteChanged();
@@ -970,9 +1425,15 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         ScanCommand.NotifyCanExecuteChanged();
         OpenSettingsCommand.NotifyCanExecuteChanged();
+        ExportProjectConfigCommand.NotifyCanExecuteChanged();
+        ImportProjectConfigCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsBusyChanged(bool value) => NotifyCommandsChanged();
+
+    partial void OnMissingCutFromChanged(int value) => DetectMissingCutsCommand.NotifyCanExecuteChanged();
+
+    partial void OnMissingCutToChanged(int value) => DetectMissingCutsCommand.NotifyCanExecuteChanged();
 
     partial void OnInsertAfterCutChanged(int value) => InsertCutCommand.NotifyCanExecuteChanged();
 }
@@ -981,6 +1442,7 @@ public sealed class PreviewRowViewModel
 {
     public PreviewRowViewModel(
         string cutId,
+        CutNumber? parsedCut,
         string fullPath,
         string source,
         string target,
@@ -988,6 +1450,7 @@ public sealed class PreviewRowViewModel
         string message)
     {
         CutId = cutId;
+        ParsedCut = parsedCut;
         FullPath = fullPath;
         Source = source;
         Target = target;
@@ -997,6 +1460,10 @@ public sealed class PreviewRowViewModel
     }
 
     public string CutId { get; }
+
+    public CutNumber? ParsedCut { get; }
+
+    public int? ReorderCut => ParsedCut?.Cut;
 
     public string DisplayCutId => HasCutId ? CutId : "（未识别）";
 
@@ -1017,6 +1484,7 @@ public sealed class PreviewRowViewModel
     public static PreviewRowViewModel FromInventory(ScanInventoryItem item) =>
         new(
             item.CutId,
+            item.ParsedCut,
             item.SourcePath.Value,
             Path.GetFileName(item.SourcePath.Value),
             item.TargetDisplay,
@@ -1026,6 +1494,7 @@ public sealed class PreviewRowViewModel
     public static PreviewRowViewModel FromRename(RenamePlanItem item) =>
         new(
             string.Empty,
+            null,
             item.SourcePath.Value,
             Path.GetFileName(item.SourcePath.Value),
             item.ProposedFileName.Value,
@@ -1035,6 +1504,7 @@ public sealed class PreviewRowViewModel
     public static PreviewRowViewModel FromArchive(ArchivePlanItem item) =>
         new(
             string.Empty,
+            null,
             item.SourcePath?.Value ?? string.Empty,
             item.SourcePath is null ? "(建目录)" : Path.GetFileName(item.SourcePath.Value.Value),
             item.TargetPath.Value,

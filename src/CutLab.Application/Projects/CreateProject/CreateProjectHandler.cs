@@ -1,5 +1,6 @@
 namespace CutLab.Application.Projects.CreateProject;
 
+using CutLab.Application.Common;
 using CutLab.Application.Common.Interfaces;
 using CutLab.Domain.Common;
 using CutLab.Domain.Projects;
@@ -11,7 +12,8 @@ public sealed record CreateProjectCommand(
     string NamingTemplate,
     string ArchivePathPattern,
     IReadOnlyList<string> ArchiveFolders,
-    string RootPath);
+    string RootPath,
+    string RecognitionPatternsText = "");
 
 public sealed class CreateProjectHandler
 {
@@ -49,7 +51,8 @@ public sealed class CreateProjectHandler
             new EpisodeNumber(command.Episode),
             naming.Value,
             archive.Value,
-            new WorkspacePath(command.RootPath));
+            new WorkspacePath(command.RootPath),
+            RecognitionPatternParser.Parse(command.RecognitionPatternsText));
 
         if (project.IsFailure || project.Value is null)
         {

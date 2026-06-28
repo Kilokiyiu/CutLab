@@ -156,4 +156,11 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Success();
     }
+
+    public Result UpdateRecognitionPatterns(IReadOnlyList<RecognitionPattern> patterns)
+    {
+        RecognitionPatterns = patterns;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Success();
+    }
 }

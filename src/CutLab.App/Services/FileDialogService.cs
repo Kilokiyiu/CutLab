@@ -69,4 +69,67 @@ public sealed class FileDialogService : IFileDialogService
 
         return file?.Path.LocalPath;
     }
+
+    public async Task<string?> SaveProjectConfigFileAsync(string suggestedFileName)
+    {
+        if (_owner is null)
+        {
+            return null;
+        }
+
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "导出项目配置",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "cutlab.json",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("CutLab 项目配置") { Patterns = ["*.cutlab.json", "*.json"] }
+            ]
+        });
+
+        return file?.Path.LocalPath;
+    }
+
+    public async Task<string?> OpenProjectConfigFileAsync()
+    {
+        if (_owner is null)
+        {
+            return null;
+        }
+
+        var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "导入项目配置",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("CutLab 项目配置") { Patterns = ["*.cutlab.json", "*.json"] }
+            ]
+        });
+
+        return files.Count > 0 ? files[0].Path.LocalPath : null;
+    }
+
+    public async Task<string?> SaveMissingCutsFileAsync(string suggestedFileName)
+    {
+        if (_owner is null)
+        {
+            return null;
+        }
+
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "导出缺卡清单",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "csv",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("CSV 文件") { Patterns = ["*.csv"] },
+                new FilePickerFileType("文本文件") { Patterns = ["*.txt"] }
+            ]
+        });
+
+        return file?.Path.LocalPath;
+    }
 }

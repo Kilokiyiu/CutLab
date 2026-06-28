@@ -3,6 +3,7 @@ namespace CutLab.App.ViewModels;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CutLab.Application.Projects.GetProject;
+using CutLab.Application.Projects.Templates;
 using CutLab.Application.Projects.UpdateProjectSettings;
 using CutLab.Domain.Projects;
 
@@ -10,16 +11,25 @@ public partial class ProjectSettingsViewModel : ViewModelBase
 {
     private readonly GetProjectHandler _getProjectHandler;
     private readonly UpdateProjectSettingsHandler _updateProjectSettingsHandler;
+    private readonly IProjectTemplateCatalog _templateCatalog;
     private ProjectId _projectId;
 
     public ProjectSettingsViewModel(
         GetProjectHandler getProjectHandler,
-        UpdateProjectSettingsHandler updateProjectSettingsHandler)
+        UpdateProjectSettingsHandler updateProjectSettingsHandler,
+        IProjectTemplateCatalog templateCatalog)
     {
         _getProjectHandler = getProjectHandler;
         _updateProjectSettingsHandler = updateProjectSettingsHandler;
+        _templateCatalog = templateCatalog;
         _projectId = ProjectId.New();
+        AvailableTemplates = _templateCatalog.List();
     }
+
+    public IReadOnlyList<ProjectTemplateSummary> AvailableTemplates { get; }
+
+    [ObservableProperty]
+    private ProjectTemplateSummary? _selectedTemplate;
 
     [ObservableProperty]
     private string _name = string.Empty;
@@ -43,6 +53,9 @@ public partial class ProjectSettingsViewModel : ViewModelBase
     private string _defaultVersionTag = string.Empty;
 
     [ObservableProperty]
+    private string _recognitionPatternsText = string.Empty;
+
+    [ObservableProperty]
     private string _errorMessage = string.Empty;
 
     public async Task<bool> InitializeAsync(ProjectId projectId)
@@ -62,8 +75,32 @@ public partial class ProjectSettingsViewModel : ViewModelBase
         ArchiveFoldersText = result.Value.ArchiveFoldersText;
         RootPath = result.Value.RootPath;
         DefaultVersionTag = result.Value.DefaultVersionTag;
+        RecognitionPatternsText = result.Value.RecognitionPatternsText;
         ErrorMessage = string.Empty;
         return true;
+    }
+
+    [RelayCommand]
+    private void LoadSelectedTemplate()
+    {
+        if (SelectedTemplate is null)
+        {
+            ErrorMessage = "请先选择模板。";
+            return;
+        }
+
+        var template = _templateCatalog.Get(SelectedTemplate.Name);
+        if (template is null)
+        {
+            ErrorMessage = "无法加载所选模板。";
+            return;
+        }
+
+        NamingTemplate = template.NamingTemplate;
+        ArchivePathPattern = template.ArchivePathPattern;
+        ArchiveFoldersText = string.Join(", ", template.ArchiveFolders);
+        RecognitionPatternsText = string.Join(Environment.NewLine, template.RecognitionPatterns);
+        ErrorMessage = string.Empty;
     }
 
     [RelayCommand]
@@ -78,7 +115,8 @@ public partial class ProjectSettingsViewModel : ViewModelBase
             ArchivePathPattern,
             ArchiveFoldersText,
             RootPath,
-            DefaultVersionTag));
+            DefaultVersionTag,
+            RecognitionPatternsText));
 
         if (result.IsFailure)
         {

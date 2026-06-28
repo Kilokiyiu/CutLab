@@ -52,6 +52,8 @@
 
                 <MenuItem Header="导出进度台账" Command="{Binding ExportProgressReportCommand}"/>
 
+                <MenuItem Header="导出缺卡清单..." Command="{Binding ExportMissingCutsCommand}"/>
+
             </MenuItem>
 
             <MenuItem Header="项目">
@@ -63,6 +65,16 @@
                 <Separator/>
 
                 <MenuItem Header="项目设置..." Command="{Binding OpenSettingsCommand}"/>
+
+                <Separator/>
+
+                <MenuItem Header="导出项目配置..." Command="{Binding ExportProjectConfigCommand}"/>
+
+                <MenuItem Header="导入项目配置..." Command="{Binding ImportProjectConfigCommand}"/>
+
+                <Separator/>
+
+                <MenuItem Header="删除当前项目..." Command="{Binding DeleteProjectCommand}"/>
 
             </MenuItem>
 
@@ -300,6 +312,84 @@
 
                         <Border Classes="section-header">
 
+                            <TextBlock Text="缺卡检测"/>
+
+                        </Border>
+
+                        <StackPanel Margin="12,10" Spacing="8">
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+
+                                <TextBlock Grid.Column="0"
+
+                                           Text="起始镜号"
+
+                                           VerticalAlignment="Center"
+
+                                           Opacity="0.75"
+
+                                           FontSize="12"/>
+
+                                <NumericUpDown Grid.Column="1"
+
+                                               Minimum="0"
+
+                                               Maximum="999"
+
+                                               Value="{Binding MissingCutFrom}"/>
+
+                            </Grid>
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+
+                                <TextBlock Grid.Column="0"
+
+                                           Text="结束镜号"
+
+                                           VerticalAlignment="Center"
+
+                                           Opacity="0.75"
+
+                                           FontSize="12"/>
+
+                                <NumericUpDown Grid.Column="1"
+
+                                               Minimum="0"
+
+                                               Maximum="999"
+
+                                               Value="{Binding MissingCutTo}"/>
+
+                            </Grid>
+
+                            <TextBlock Text="0 = 自动（按已识别镜号范围）"
+
+                                       Opacity="0.6"
+
+                                       FontSize="11"/>
+
+                            <Button Classes="toolbar-btn"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="缺卡检测"
+
+                                    Command="{Binding DetectMissingCutsCommand}"/>
+
+                            <Button Classes="toolbar-btn"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="导出缺卡清单"
+
+                                    Command="{Binding ExportMissingCutsCommand}"/>
+
+                        </StackPanel>
+
+
+
+                        <Border Classes="section-header">
+
                             <TextBlock Text="筛选"/>
 
                         </Border>
@@ -338,36 +428,111 @@
 
                 <Grid RowDefinitions="Auto,*">
 
-                    <Border Grid.Row="0" Classes="panel-title">
+                    <Border Grid.Row="0" Classes="panel-title" MinHeight="52">
 
-                        <TextBlock Text="{Binding ShotListTitle}"/>
+                        <Grid RowDefinitions="Auto,18">
+
+                            <TextBlock Grid.Row="0" Text="{Binding ShotListTitle}"/>
+
+                            <TextBlock Grid.Row="1"
+
+                                       Text="{Binding ReorderDragHint}"
+
+                                       Foreground="#5B9BD5"
+
+                                       FontSize="11"
+
+                                       VerticalAlignment="Top"
+
+                                       TextTrimming="CharacterEllipsis"/>
+
+                        </Grid>
 
                     </Border>
 
                     <Grid Grid.Row="1" RowDefinitions="Auto,*">
 
-                        <Grid Grid.Row="0"
+                        <Grid x:Name="ShotListHeaderGrid"
 
-                              ColumnDefinitions="90,2*,2*,80,2*"
+                              Grid.Row="0"
 
                               Background="#484848"
 
                               Height="32">
 
+                            <Grid.ColumnDefinitions>
+
+                                <ColumnDefinition Width="90" MinWidth="48"/>
+
+                                <ColumnDefinition Width="4"/>
+
+                                <ColumnDefinition Width="200" MinWidth="64"/>
+
+                                <ColumnDefinition Width="4"/>
+
+                                <ColumnDefinition Width="200" MinWidth="64"/>
+
+                                <ColumnDefinition Width="4"/>
+
+                                <ColumnDefinition Width="80" MinWidth="48"/>
+
+                                <ColumnDefinition Width="4"/>
+
+                                <ColumnDefinition Width="*" MinWidth="80"/>
+
+                            </Grid.ColumnDefinitions>
+
                             <TextBlock Grid.Column="0" Text="卡号" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
 
-                            <TextBlock Grid.Column="1" Text="来源" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+                            <GridSplitter Grid.Column="1"
 
-                            <TextBlock Grid.Column="2" Text="目标" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+                                          Classes="shot-list-column-splitter"
 
-                            <TextBlock Grid.Column="3" Text="状态" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+                                          Width="4"
 
-                            <TextBlock Grid.Column="4" Text="说明" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+                                          ResizeDirection="Columns"/>
+
+                            <TextBlock Grid.Column="2" Text="来源" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                            <GridSplitter Grid.Column="3"
+
+                                          Classes="shot-list-column-splitter"
+
+                                          Width="4"
+
+                                          ResizeDirection="Columns"/>
+
+                            <TextBlock Grid.Column="4" Text="目标" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                            <GridSplitter Grid.Column="5"
+
+                                          Classes="shot-list-column-splitter"
+
+                                          Width="4"
+
+                                          ResizeDirection="Columns"/>
+
+                            <TextBlock Grid.Column="6" Text="状态" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
+
+                            <GridSplitter Grid.Column="7"
+
+                                          Classes="shot-list-column-splitter"
+
+                                          Width="4"
+
+                                          ResizeDirection="Columns"/>
+
+                            <TextBlock Grid.Column="8" Text="说明" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,0"/>
 
                         </Grid>
 
-                        <ListBox Grid.Row="1"
+                        <Grid Grid.Row="1">
+
+                        <ListBox x:Name="ShotList"
                                  Classes="shot-list"
+                                 DragDrop.AllowDrop="True"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Stretch"
 
                                  ItemsSource="{Binding PreviewItems}"
 
@@ -381,7 +546,21 @@
 
                                 <DataTemplate x:DataType="vm:PreviewRowViewModel">
 
-                                    <Grid ColumnDefinitions="90,2*,2*,80,2*" MinHeight="32">
+                                    <Grid MinHeight="32">
+
+                                        <Grid.ColumnDefinitions>
+
+                                            <ColumnDefinition Width="{Binding #ShotList.((vm:MainWindowViewModel)DataContext).ShotColCutWidth}"/>
+
+                                            <ColumnDefinition Width="{Binding #ShotList.((vm:MainWindowViewModel)DataContext).ShotColSourceWidth}"/>
+
+                                            <ColumnDefinition Width="{Binding #ShotList.((vm:MainWindowViewModel)DataContext).ShotColTargetWidth}"/>
+
+                                            <ColumnDefinition Width="{Binding #ShotList.((vm:MainWindowViewModel)DataContext).ShotColStatusWidth}"/>
+
+                                            <ColumnDefinition Width="*"/>
+
+                                        </Grid.ColumnDefinitions>
 
                                         <TextBlock Grid.Column="0"
 
@@ -446,6 +625,26 @@
                             </ListBox.ItemTemplate>
 
                         </ListBox>
+
+                        <Canvas x:Name="ReorderOverlay"
+
+                                HorizontalAlignment="Stretch"
+
+                                VerticalAlignment="Stretch"
+
+                                IsHitTestVisible="False">
+
+                            <Border x:Name="ReorderInsertIndicator"
+
+                                    IsVisible="False"
+
+                                    Height="2"
+
+                                    Background="#5B9BD5"/>
+
+                        </Canvas>
+
+                        </Grid>
 
                     </Grid>
 

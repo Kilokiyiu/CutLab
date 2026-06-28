@@ -87,6 +87,19 @@
         <Setter Property="Background" Value="#555555"/>
     </Style>
 
+    <Style Selector="GridSplitter:pointerover">
+        <Setter Property="Background" Value="#5B9BD5"/>
+    </Style>
+
+    <Style Selector="GridSplitter.shot-list-column-splitter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Cursor" Value="SizeWestEast"/>
+    </Style>
+
+    <Style Selector="GridSplitter.shot-list-column-splitter:pointerover">
+        <Setter Property="Background" Value="#5B9BD5"/>
+    </Style>
+
     <Style Selector="Menu">
         <Setter Property="Background" Value="#3C3F41"/>
         <Setter Property="Foreground" Value="#DDDDDD"/>
@@ -112,6 +125,20 @@
 
     <Style Selector="ListBox.shot-list ListBoxItem:pointerover /template/ ContentPresenter">
         <Setter Property="Background" Value="#383838"/>
+    </Style>
+
+    <Style Selector="ListBox.shot-list ListBoxItem /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="2,0,0,0"/>
+    </Style>
+
+    <Style Selector="ListBox.shot-list ListBoxItem.reorder-drop-target /template/ ContentPresenter">
+        <Setter Property="Background" Value="#1E3A5F"/>
+        <Setter Property="BorderBrush" Value="#5B9BD5"/>
+    </Style>
+
+    <Style Selector="ListBox.shot-list ListBoxItem.reorder-drag-source /template/ ContentPresenter">
+        <Setter Property="Opacity" Value="0.45"/>
     </Style>
 
 </Styles>

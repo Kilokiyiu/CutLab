@@ -34,6 +34,7 @@ sealed class Program
         var services = new ServiceCollection();
         services.AddApplication();
         services.AddInfrastructure();
+        services.AddSingleton<IUserPreferencesStore, JsonUserPreferencesStore>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IWindowService, WindowService>();
         services.AddTransient<MainWindowViewModel>();

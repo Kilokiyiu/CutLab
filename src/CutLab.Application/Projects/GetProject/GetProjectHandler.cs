@@ -1,5 +1,6 @@
 namespace CutLab.Application.Projects.GetProject;
 
+using CutLab.Application.Common;
 using CutLab.Domain.Common;
 using CutLab.Domain.Projects;
 
@@ -13,7 +14,8 @@ public sealed record ProjectSettingsDto(
     string ArchivePathPattern,
     string ArchiveFoldersText,
     string RootPath,
-    string DefaultVersionTag);
+    string DefaultVersionTag,
+    string RecognitionPatternsText);
 
 public sealed class GetProjectHandler
 {
@@ -42,6 +44,7 @@ public sealed class GetProjectHandler
             project.ArchiveTemplate.PathPattern,
             string.Join(", ", project.ArchiveTemplate.FolderNames),
             project.RootPath.Value,
-            project.DefaultVersionTag?.Value ?? string.Empty));
+            project.DefaultVersionTag?.Value ?? string.Empty,
+            RecognitionPatternParser.Format(project.RecognitionPatterns)));
     }
 }

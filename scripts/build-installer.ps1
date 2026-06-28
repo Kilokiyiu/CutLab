@@ -92,6 +92,13 @@ try {
     if (Test-Path $setupExe) {
         Write-Host "    Output: $setupExe"
     }
+
+    # Optional code signing (requires a valid Authenticode certificate):
+    # $signtool = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+    # if (Test-Path $signtool) {
+    #     & $signtool sign /fd SHA256 /a $setupExe
+    #     & $signtool sign /fd SHA256 /a $exePath
+    # }
 }
 finally {
     Pop-Location

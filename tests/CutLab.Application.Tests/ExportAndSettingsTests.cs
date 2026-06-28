@@ -96,7 +96,8 @@ public class UpdateProjectSettingsHandlerTests
                 "C{CUT:03}/{TYPE}",
                 "分镜, 原画",
                 tempDir,
-                "v1"));
+                "v1",
+                "{N}卡{TYPE}"));
 
             Assert.True(updateResult.IsSuccess);
 
@@ -106,6 +107,7 @@ public class UpdateProjectSettingsHandlerTests
             Assert.Equal(2, project.Episode.Value);
             Assert.Equal("C{CUT:03}_{TYPE}", project.NamingConvention.Template);
             Assert.Equal("v1", project.DefaultVersionTag?.Value);
+            Assert.Equal(["{N}卡{TYPE}"], project.RecognitionPatterns.Select(pattern => pattern.Pattern).ToList());
         }
         finally
         {

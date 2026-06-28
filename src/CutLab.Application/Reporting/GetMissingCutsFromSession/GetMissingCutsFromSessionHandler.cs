@@ -7,7 +7,11 @@ using CutLab.Domain.Projects;
 using CutLab.Domain.Scanning;
 using CutLab.Domain.ValueObjects;
 
-public sealed record GetMissingCutsFromSessionQuery(ProjectId ProjectId, Guid SessionId);
+public sealed record GetMissingCutsFromSessionQuery(
+    ProjectId ProjectId,
+    Guid SessionId,
+    int? ScopeFromCut = null,
+    int? ScopeToCut = null);
 
 public sealed record MissingCutsFromSessionDto(
     CutScope Scope,
@@ -60,11 +64,18 @@ public sealed class GetMissingCutsFromSessionHandler
         }
 
         var first = recognizedCuts[0];
+        var minCut = query.ScopeFromCut ?? recognizedCuts.Min(c => c.Cut);
+        var maxCut = query.ScopeToCut ?? recognizedCuts.Max(c => c.Cut);
+        if (minCut > maxCut)
+        {
+            return Result.Failure<MissingCutsFromSessionDto>("缺卡检测范围无效：起始镜号不能大于结束镜号。");
+        }
+
         var scope = new CutScope(
             new EpisodeNumber(first.Episode),
             first.Scene,
-            new CutNumber(first.Episode, first.Scene, recognizedCuts.Min(c => c.Cut)),
-            new CutNumber(first.Episode, first.Scene, recognizedCuts.Max(c => c.Cut)));
+            new CutNumber(first.Episode, first.Scene, minCut),
+            new CutNumber(first.Episode, first.Scene, maxCut));
 
         var registry = await _registryRepository.GetByProjectAsync(query.ProjectId, scope, cancellationToken)
                        ?? CutRegistry.Create(query.ProjectId, scope);
