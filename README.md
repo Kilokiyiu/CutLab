@@ -33,6 +33,7 @@ dotnet run --project src/CutLab.App
 
 ## 文档
 
+- [使用说明](docs/USER_GUIDE.md)
 - [架构设计](docs/ARCHITECTURE.md)
 - [安装与打包](docs/INSTALL.md)
 - [命名规则](docs/NAMING_RULE_SPEC.md)
