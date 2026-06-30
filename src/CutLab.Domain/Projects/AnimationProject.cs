@@ -15,7 +15,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         IReadOnlyList<RecognitionPattern> recognitionPatterns,
         DateTimeOffset? createdAt = null,
         DateTimeOffset? updatedAt = null,
-        VersionTag? defaultVersionTag = null)
+        VersionTag? defaultVersionTag = null,
+        FrameSequenceSettings? frameSequenceSettings = null)
     {
         Id = id;
         Name = name;
@@ -27,6 +28,7 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow;
         UpdatedAt = updatedAt ?? CreatedAt;
         DefaultVersionTag = defaultVersionTag;
+        FrameSequenceSettings = frameSequenceSettings ?? FrameSequenceSettings.Disabled;
     }
 
     public string Name { get; private set; }
@@ -47,13 +49,16 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
 
     public VersionTag? DefaultVersionTag { get; private set; }
 
+    public FrameSequenceSettings FrameSequenceSettings { get; private set; }
+
     public static Result<AnimationProject> Create(
         string name,
         EpisodeNumber episode,
         NamingConvention namingConvention,
         ArchiveTemplate archiveTemplate,
         WorkspacePath rootPath,
-        IReadOnlyList<RecognitionPattern>? recognitionPatterns = null)
+        IReadOnlyList<RecognitionPattern>? recognitionPatterns = null,
+        FrameSequenceSettings? frameSequenceSettings = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -72,7 +77,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
             namingConvention,
             archiveTemplate,
             rootPath,
-            recognitionPatterns ?? []));
+            recognitionPatterns ?? [],
+            frameSequenceSettings: frameSequenceSettings));
     }
 
     public static AnimationProject Restore(
@@ -85,7 +91,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
         IReadOnlyList<RecognitionPattern> recognitionPatterns,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
-        VersionTag? defaultVersionTag = null) =>
+        VersionTag? defaultVersionTag = null,
+        FrameSequenceSettings? frameSequenceSettings = null) =>
         new(
             id,
             name.Trim(),
@@ -96,7 +103,8 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
             recognitionPatterns,
             createdAt,
             updatedAt,
-            defaultVersionTag);
+            defaultVersionTag,
+            frameSequenceSettings ?? FrameSequenceSettings.Disabled);
 
     public Result UpdateNamingConvention(NamingConvention convention)
     {
@@ -160,6 +168,13 @@ public sealed class AnimationProject : AggregateRoot<ProjectId>
     public Result UpdateRecognitionPatterns(IReadOnlyList<RecognitionPattern> patterns)
     {
         RecognitionPatterns = patterns;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Success();
+    }
+
+    public Result UpdateFrameSequenceSettings(FrameSequenceSettings settings)
+    {
+        FrameSequenceSettings = settings;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Success();
     }

@@ -1,6 +1,8 @@
 namespace CutLab.Application.Projects.Templates;
 
 using System.Text.Json;
+using CutLab.Application.Common;
+using CutLab.Domain.ValueObjects;
 
 public sealed record ProjectTemplateSummary(string Name, string Description);
 
@@ -17,6 +19,8 @@ public sealed class ProjectTemplateDefinition
     public required IReadOnlyList<string> ArchiveFolders { get; init; }
 
     public required IReadOnlyList<string> RecognitionPatterns { get; init; }
+
+    public required IReadOnlyDictionary<AssetType, string> TypeSuffixes { get; init; }
 }
 
 public interface IProjectTemplateCatalog
@@ -112,7 +116,8 @@ public sealed class ProjectTemplateCatalog : IProjectTemplateCatalog
                 RecognitionPatterns = dto.RecognitionPatterns?
                     .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
                     .Select(pattern => pattern.Trim())
-                    .ToList() ?? []
+                    .ToList() ?? [],
+                TypeSuffixes = TypeSuffixesParser.FromTemplateDictionary(dto.NamingRule?.TypeSuffixes)
             };
         }
         catch (JsonException)
@@ -137,6 +142,8 @@ public sealed class ProjectTemplateCatalog : IProjectTemplateCatalog
     private sealed class ProjectTemplateNamingRuleDto
     {
         public string? Template { get; set; }
+
+        public Dictionary<string, string>? TypeSuffixes { get; set; }
     }
 
     private sealed class ProjectTemplateArchiveDto

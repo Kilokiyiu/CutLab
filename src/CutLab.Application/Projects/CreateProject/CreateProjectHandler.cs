@@ -13,7 +13,13 @@ public sealed record CreateProjectCommand(
     string ArchivePathPattern,
     IReadOnlyList<string> ArchiveFolders,
     string RootPath,
-    string RecognitionPatternsText = "");
+    string RecognitionPatternsText = "",
+    string TypeSuffixesText = "",
+    string NamingSeparator = "_",
+    bool FrameSequenceEnabled = false,
+    string FrameSequencePattern = "C{CUT:03}_{FRAME:03}",
+    int FrameSequenceMinFrame = 1,
+    int FrameSequenceMaxFrame = 99);
 
 public sealed class CreateProjectHandler
 {
@@ -32,8 +38,8 @@ public sealed class CreateProjectHandler
     {
         var naming = NamingConvention.Create(
             command.NamingTemplate,
-            "_",
-            DefaultTypeSuffixes());
+            string.IsNullOrWhiteSpace(command.NamingSeparator) ? "_" : command.NamingSeparator,
+            TypeSuffixesParser.Parse(command.TypeSuffixesText));
 
         if (naming.IsFailure || naming.Value is null)
         {
@@ -46,13 +52,24 @@ public sealed class CreateProjectHandler
             return Result.Failure<ProjectId>(archive.Error ?? "归档模板无效。");
         }
 
+        var frameSettings = FrameSequenceSettings.Create(
+            command.FrameSequenceEnabled,
+            command.FrameSequencePattern,
+            command.FrameSequenceMinFrame,
+            command.FrameSequenceMaxFrame);
+        if (frameSettings.IsFailure || frameSettings.Value is null)
+        {
+            return Result.Failure<ProjectId>(frameSettings.Error ?? "帧序列设置无效。");
+        }
+
         var project = AnimationProject.Create(
             command.Name,
             new EpisodeNumber(command.Episode),
             naming.Value,
             archive.Value,
             new WorkspacePath(command.RootPath),
-            RecognitionPatternParser.Parse(command.RecognitionPatternsText));
+            RecognitionPatternParser.Parse(command.RecognitionPatternsText),
+            frameSettings.Value);
 
         if (project.IsFailure || project.Value is null)
         {
@@ -63,14 +80,4 @@ public sealed class CreateProjectHandler
         await _unitOfWork.CommitAsync(cancellationToken);
         return Result.Success(project.Value.Id);
     }
-
-    private static IReadOnlyDictionary<AssetType, string> DefaultTypeSuffixes() =>
-        new Dictionary<AssetType, string>
-        {
-            [AssetType.Storyboard] = "分镜",
-            [AssetType.Keyframe] = "原画",
-            [AssetType.Inbetween] = "动画",
-            [AssetType.Background] = "背景",
-            [AssetType.Render] = "渲染"
-        };
 }

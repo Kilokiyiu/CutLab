@@ -14,6 +14,8 @@ public interface IWindowService
 
     Task<bool> ShowProjectSettingsAsync(ProjectId projectId);
 
+    Task<NewProjectDialogResult?> ShowNewProjectAsync();
+
     Task<bool> ConfirmAsync(string title, string message);
 }
 
@@ -46,6 +48,18 @@ public sealed class WindowService : IWindowService
 
         await window.ShowDialog(_owner);
         return window.Saved;
+    }
+
+    public async Task<NewProjectDialogResult?> ShowNewProjectAsync()
+    {
+        if (_owner is null)
+        {
+            return null;
+        }
+
+        var window = new NewProjectWindow();
+        await window.ShowDialog(_owner);
+        return window.Created ? window.ViewModel.Result : null;
     }
 
     public async Task<bool> ConfirmAsync(string title, string message)

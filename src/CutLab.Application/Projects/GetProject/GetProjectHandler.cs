@@ -11,11 +11,17 @@ public sealed record ProjectSettingsDto(
     string Name,
     int Episode,
     string NamingTemplate,
+    string NamingSeparator,
     string ArchivePathPattern,
     string ArchiveFoldersText,
     string RootPath,
     string DefaultVersionTag,
-    string RecognitionPatternsText);
+    string RecognitionPatternsText,
+    string TypeSuffixesText,
+    bool FrameSequenceEnabled,
+    string FrameSequencePattern,
+    int FrameSequenceMinFrame,
+    int FrameSequenceMaxFrame);
 
 public sealed class GetProjectHandler
 {
@@ -41,10 +47,16 @@ public sealed class GetProjectHandler
             project.Name,
             project.Episode.Value,
             project.NamingConvention.Template,
+            project.NamingConvention.Separator,
             project.ArchiveTemplate.PathPattern,
             string.Join(", ", project.ArchiveTemplate.FolderNames),
             project.RootPath.Value,
             project.DefaultVersionTag?.Value ?? string.Empty,
-            RecognitionPatternParser.Format(project.RecognitionPatterns)));
+            RecognitionPatternParser.Format(project.RecognitionPatterns),
+            TypeSuffixesParser.Format(project.NamingConvention.TypeSuffixes),
+            project.FrameSequenceSettings.Enabled,
+            project.FrameSequenceSettings.FileNamePattern,
+            project.FrameSequenceSettings.MinFrame,
+            project.FrameSequenceSettings.MaxFrame));
     }
 }

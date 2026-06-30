@@ -13,7 +13,8 @@ public sealed record ExecuteArchiveCommand(
     ProjectId ProjectId,
     Guid SessionId,
     ArchiveExecutionMode Mode,
-    bool DryRun);
+    bool DryRun,
+    ConflictResolutionStrategy ConflictStrategy = ConflictResolutionStrategy.Fail);
 
 public sealed record ExecuteArchiveResult(
     bool DryRun,
@@ -51,6 +52,7 @@ public sealed class ExecuteArchiveHandler
 
     public async Task<Result<ExecuteArchiveResult>> HandleAsync(
         ExecuteArchiveCommand command,
+        IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var project = await _projectRepository.GetByIdAsync(command.ProjectId, cancellationToken);
@@ -70,7 +72,12 @@ public sealed class ExecuteArchiveHandler
             return Result.Failure<ExecuteArchiveResult>("扫描会话与项目不匹配。");
         }
 
-        var items = ArchivePlanBuilder.Build(project, session, _archivePathResolver, command.Mode);
+        var items = ArchivePlanBuilder.Build(
+            project,
+            session,
+            _archivePathResolver,
+            command.Mode,
+            command.ConflictStrategy);
         var readyItems = items.Where(item => item.Status == ArchivePlanStatus.Ready).ToList();
 
         if (command.DryRun)
@@ -108,7 +115,7 @@ public sealed class ExecuteArchiveHandler
             }
         }
 
-        await _fileSystemGateway.ApplyOperationsAsync(batch, progress: null, cancellationToken);
+        await _fileSystemGateway.ApplyOperationsAsync(batch, progress, cancellationToken);
 
         var completeResult = batch.Complete();
         if (completeResult.IsFailure)

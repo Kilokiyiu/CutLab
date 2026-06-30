@@ -14,7 +14,8 @@ public sealed record ReorderCutsCommand(
     Guid SessionId,
     int MovedCut,
     int TargetIndex,
-    bool DryRun);
+    bool DryRun,
+    ConflictResolutionStrategy ConflictStrategy = ConflictResolutionStrategy.Fail);
 
 public sealed record ReorderCutsResult(
     bool DryRun,
@@ -53,6 +54,7 @@ public sealed class ReorderCutsHandler
 
     public async Task<Result<ReorderCutsResult>> HandleAsync(
         ReorderCutsCommand command,
+        IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var project = await _projectRepository.GetByIdAsync(command.ProjectId, cancellationToken);
@@ -86,7 +88,7 @@ public sealed class ReorderCutsHandler
         }
 
         var versionTag = project.DefaultVersionTag;
-        var items = BuildRenameItems(session, project, mapResult.Value, versionTag);
+        var items = BuildRenameItems(session, project, mapResult.Value, versionTag, command.ConflictStrategy);
         var readyItems = items.Where(item => item.Status == RenamePlanStatus.Ready).ToList();
 
         if (command.DryRun)
@@ -110,7 +112,7 @@ public sealed class ReorderCutsHandler
         var batch = OperationBatch.Create(command.ProjectId, BatchOperationType.Rename);
         AddStagedRenameEntries(batch, readyItems);
 
-        await _fileSystemGateway.ApplyOperationsAsync(batch, progress: null, cancellationToken);
+        await _fileSystemGateway.ApplyOperationsAsync(batch, progress, cancellationToken);
 
         var completeResult = batch.Complete();
         if (completeResult.IsFailure)
@@ -136,7 +138,8 @@ public sealed class ReorderCutsHandler
         ScanSession session,
         AnimationProject project,
         IReadOnlyDictionary<CutNumber, CutNumber> renumberMap,
-        VersionTag? versionTag)
+        VersionTag? versionTag,
+        ConflictResolutionStrategy conflictStrategy)
     {
         var candidates = new List<RenameCandidate>();
 
@@ -205,32 +208,21 @@ public sealed class ReorderCutsHandler
             }
 
             var targetFullPath = candidate.TargetPath.Value;
-            if (targetPaths.ContainsKey(targetFullPath))
-            {
-                items.Add(new RenamePlanItem(
-                    candidate.AssetId,
-                    candidate.SourcePath,
-                    candidate.TargetPath,
-                    candidate.ProposedFileName,
-                    RenamePlanStatus.Conflict,
-                    "目标文件名冲突。"));
-                continue;
-            }
+            var resolution = TargetPathConflictResolver.ResolveRename(
+                targetFullPath,
+                candidate.ProposedFileName,
+                candidate.AssetId,
+                targetPaths,
+                conflictStrategy,
+                movingSourcePaths);
 
-            if (File.Exists(targetFullPath) && !movingSourcePaths.Contains(targetFullPath))
-            {
-                items.Add(new RenamePlanItem(
-                    candidate.AssetId,
-                    candidate.SourcePath,
-                    candidate.TargetPath,
-                    candidate.ProposedFileName,
-                    RenamePlanStatus.Conflict,
-                    "目标文件已存在。"));
-                continue;
-            }
-
-            targetPaths[targetFullPath] = candidate.AssetId;
-            items.Add(candidate.ToPlanItem());
+            items.Add(new RenamePlanItem(
+                candidate.AssetId,
+                candidate.SourcePath,
+                resolution.TargetPath,
+                resolution.ProposedFileName,
+                resolution.Status,
+                resolution.Message));
         }
 
         return items;

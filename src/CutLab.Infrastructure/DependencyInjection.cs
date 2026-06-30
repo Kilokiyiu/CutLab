@@ -35,6 +35,8 @@ public static class DependencyInjection
         services.AddSingleton<IFileSystemGateway, LocalFileSystemGateway>();
         services.AddSingleton<INamingService, TemplateNamingService>();
         services.AddSingleton<IRecognitionService, RegexRecognitionService>();
+        services.AddSingleton<IFrameSequenceAnalyzer, FrameSequenceAnalyzer>();
+        services.AddSingleton<IFrameSequenceFileParser, FrameSequenceFileParser>();
         services.AddSingleton<IArchivePathResolver, TemplateArchivePathResolver>();
         services.AddSingleton<ICutListExportService, MiniExcelCutListExportService>();
         services.AddSingleton<IProgressReportExportService, MiniExcelProgressReportExportService>();

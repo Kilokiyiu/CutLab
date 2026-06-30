@@ -3,6 +3,7 @@ using CutLab.Application.Projects.UpdateProjectSettings;
 using CutLab.Application.Reporting.ExportCutList;
 using CutLab.Application.Scanning.ScanFolder;
 using CutLab.Domain.Projects;
+using CutLab.Domain.ValueObjects;
 using CutLab.Infrastructure.Export;
 using CutLab.Infrastructure.FileSystem;
 using CutLab.Infrastructure.Naming;
@@ -93,11 +94,17 @@ public class UpdateProjectSettingsHandlerTests
                 "New Name",
                 2,
                 "C{CUT:03}_{TYPE}",
+                "_",
                 "C{CUT:03}/{TYPE}",
                 "分镜, 原画",
                 tempDir,
                 "v1",
-                "{N}卡{TYPE}"));
+                "{N}卡{TYPE}",
+                "分镜, 原画",
+                false,
+                "C{CUT:03}_{FRAME:03}",
+                1,
+                99));
 
             Assert.True(updateResult.IsSuccess);
 
@@ -108,6 +115,8 @@ public class UpdateProjectSettingsHandlerTests
             Assert.Equal("C{CUT:03}_{TYPE}", project.NamingConvention.Template);
             Assert.Equal("v1", project.DefaultVersionTag?.Value);
             Assert.Equal(["{N}卡{TYPE}"], project.RecognitionPatterns.Select(pattern => pattern.Pattern).ToList());
+            Assert.Equal("分镜", project.NamingConvention.TypeSuffixes[AssetType.Storyboard]);
+            Assert.Equal("原画", project.NamingConvention.TypeSuffixes[AssetType.Keyframe]);
         }
         finally
         {

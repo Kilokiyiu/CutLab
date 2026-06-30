@@ -232,6 +232,42 @@
 
                                       IsChecked="{Binding ScanRecursive}"/>
 
+                            <CheckBox Content="仅预览（不执行重命名/归档）"
+
+                                      IsChecked="{Binding DryRunOnly}"/>
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+
+                                <TextBlock Grid.Column="0"
+
+                                           Text="冲突策略"
+
+                                           VerticalAlignment="Center"
+
+                                           Opacity="0.75"
+
+                                           FontSize="12"/>
+
+                                <ComboBox Grid.Column="1"
+
+                                          ItemsSource="{Binding ConflictStrategyOptions}"
+
+                                          SelectedItem="{Binding SelectedConflictStrategy}">
+
+                                    <ComboBox.ItemTemplate>
+
+                                        <DataTemplate>
+
+                                            <TextBlock Text="{Binding Label}"/>
+
+                                        </DataTemplate>
+
+                                    </ComboBox.ItemTemplate>
+
+                                </ComboBox>
+
+                            </Grid>
+
                         </StackPanel>
 
 
@@ -383,6 +419,94 @@
                                     Content="导出缺卡清单"
 
                                     Command="{Binding ExportMissingCutsCommand}"/>
+
+                        </StackPanel>
+
+
+
+                        <Border Classes="section-header">
+
+                            <TextBlock Text="帧序列绑定"/>
+
+                        </Border>
+
+                        <StackPanel Margin="12,10" Spacing="8">
+
+                            <TextBlock Text="{Binding FrameSequenceSummary}"
+
+                                       TextWrapping="Wrap"
+
+                                       Opacity="0.85"
+
+                                       FontSize="12"/>
+
+                            <Button Classes="toolbar-btn"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="帧序列检测"
+
+                                    Command="{Binding DetectFrameSequencesCommand}"/>
+
+                            <Button Classes="toolbar-btn"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="导出帧序列问题"
+
+                                    Command="{Binding ExportFrameSequencesCommand}"/>
+
+                        </StackPanel>
+
+
+
+                        <Border Classes="section-header">
+
+                            <TextBlock Text="操作历史"/>
+
+                        </Border>
+
+                        <StackPanel Margin="12,10" Spacing="8">
+
+                            <TextBlock Text="{Binding UndoableCount, StringFormat=还可撤销 {0} 步}"
+
+                                       Opacity="0.85"
+
+                                       FontSize="12"
+
+                                       IsVisible="{Binding HasUndoableOperations}"/>
+
+                            <ListBox MaxHeight="120"
+
+                                     ItemsSource="{Binding OperationHistoryItems}"
+
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+                                <ListBox.ItemTemplate>
+
+                                    <DataTemplate>
+
+                                        <TextBlock Text="{Binding Summary}"
+
+                                                   TextWrapping="Wrap"
+
+                                                   FontSize="11"
+
+                                                   Opacity="0.9"/>
+
+                                    </DataTemplate>
+
+                                </ListBox.ItemTemplate>
+
+                            </ListBox>
+
+                            <Button Classes="toolbar-btn"
+
+                                    HorizontalAlignment="Stretch"
+
+                                    Content="撤销上一步"
+
+                                    Command="{Binding UndoCommand}"/>
 
                         </StackPanel>
 
@@ -810,25 +934,39 @@
 
         <Border Grid.Row="3" Classes="status-bar">
 
-            <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
 
-                <TextBlock Grid.Column="0"
+                <ProgressBar Minimum="0"
 
-                           Text="{Binding StatusMessage}"
+                             Maximum="{Binding OperationProgressMaximum}"
 
-                           TextTrimming="CharacterEllipsis"/>
+                             Value="{Binding OperationProgressValue}"
 
-                <TextBlock Grid.Column="1"
+                             Height="4"
 
-                           Margin="16,0,0,0"
+                             IsVisible="{Binding ShowOperationProgress}"/>
 
-                           Text="{Binding MissingCutsSummary}"
+                <Grid ColumnDefinitions="*,Auto">
 
-                           Foreground="#88BBFF"
+                    <TextBlock Grid.Column="0"
 
-                           IsVisible="{Binding MissingCutsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                               Text="{Binding StatusMessage}"
 
-            </Grid>
+                               TextTrimming="CharacterEllipsis"/>
+
+                    <TextBlock Grid.Column="1"
+
+                               Margin="16,0,0,0"
+
+                               Text="{Binding MissingCutsSummary}"
+
+                               Foreground="#88BBFF"
+
+                               IsVisible="{Binding MissingCutsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                </Grid>
+
+            </StackPanel>
 
         </Border>
 

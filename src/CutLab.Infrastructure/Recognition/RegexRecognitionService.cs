@@ -12,20 +12,21 @@ public sealed partial class RegexRecognitionService : IRecognitionService
         NamingConvention defaultConvention)
     {
         var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+        var suffixes = MergeTypeSuffixes(defaultConvention.TypeSuffixes);
 
-        if (StandardCutPattern().Match(nameWithoutExtension) is { Success: true } standardMatch)
+        if (BuildStandardPattern(suffixes).Match(nameWithoutExtension) is { Success: true } standardMatch)
         {
-            return ParseStandardMatch(standardMatch);
+            return ParseStandardMatch(standardMatch, suffixes);
         }
 
-        if (SimpleCutPattern().Match(nameWithoutExtension) is { Success: true } simpleMatch)
+        if (BuildSimplePattern(suffixes).Match(nameWithoutExtension) is { Success: true } simpleMatch)
         {
-            return ParseSimpleMatch(simpleMatch, defaultConvention);
+            return ParseSimpleMatch(simpleMatch, defaultConvention, suffixes);
         }
 
-        if (ChineseCardPattern().Match(nameWithoutExtension) is { Success: true } chineseMatch)
+        if (BuildChineseCardPattern(suffixes).Match(nameWithoutExtension) is { Success: true } chineseMatch)
         {
-            return ParseChineseMatch(chineseMatch, defaultConvention);
+            return ParseChineseMatch(chineseMatch, defaultConvention, suffixes);
         }
 
         if (OrdinalCardPattern().Match(nameWithoutExtension) is { Success: true } ordinalMatch)
@@ -40,19 +41,19 @@ public sealed partial class RegexRecognitionService : IRecognitionService
                 continue;
             }
 
-            var regex = RecognitionPatternCompiler.TryCompile(pattern.Pattern);
+            var regex = RecognitionPatternCompiler.TryCompile(pattern.Pattern, suffixes);
             if (regex?.Match(nameWithoutExtension) is not { Success: true } customMatch)
             {
                 continue;
             }
 
-            return ParseCustomMatch(customMatch, defaultConvention);
+            return ParseCustomMatch(customMatch, defaultConvention, suffixes);
         }
 
         return new RecognitionResult(null, null, RecognitionStatus.Unrecognized, "未匹配任何识别规则。");
     }
 
-    private static RecognitionResult ParseStandardMatch(Match match)
+    private static RecognitionResult ParseStandardMatch(Match match, IReadOnlyDictionary<AssetType, string> suffixes)
     {
         var episode = int.Parse(match.Groups["ep"].Value);
         var scene = int.Parse(match.Groups["sc"].Value);
@@ -62,10 +63,13 @@ public sealed partial class RegexRecognitionService : IRecognitionService
             : match.Groups["insert"].Value;
         var typeText = match.Groups["type"].Value;
         var versionTag = ParseVersionGroup(match);
-        return BuildResult(episode, scene, cut, insert, typeText, versionTag);
+        return BuildResult(episode, scene, cut, insert, typeText, versionTag, suffixes);
     }
 
-    private static RecognitionResult ParseSimpleMatch(Match match, NamingConvention defaultConvention)
+    private static RecognitionResult ParseSimpleMatch(
+        Match match,
+        NamingConvention defaultConvention,
+        IReadOnlyDictionary<AssetType, string> suffixes)
     {
         var cut = int.Parse(match.Groups["cut"].Value);
         var insert = string.IsNullOrEmpty(match.Groups["insert"].Value)
@@ -73,14 +77,17 @@ public sealed partial class RegexRecognitionService : IRecognitionService
             : match.Groups["insert"].Value;
         var typeText = match.Groups["type"].Value;
         var versionTag = ParseVersionGroup(match);
-        return BuildResult(defaultConvention, cut, insert, typeText, versionTag);
+        return BuildResult(defaultConvention, cut, insert, typeText, versionTag, suffixes);
     }
 
-    private static RecognitionResult ParseChineseMatch(Match match, NamingConvention defaultConvention)
+    private static RecognitionResult ParseChineseMatch(
+        Match match,
+        NamingConvention defaultConvention,
+        IReadOnlyDictionary<AssetType, string> suffixes)
     {
         var cut = int.Parse(match.Groups["cut"].Value);
         var typeText = match.Groups["type"].Value;
-        return BuildResult(defaultConvention, cut, null, typeText, null);
+        return BuildResult(defaultConvention, cut, null, typeText, null, suffixes);
     }
 
     private static RecognitionResult ParseOrdinalMatch(Match match)
@@ -94,7 +101,10 @@ public sealed partial class RegexRecognitionService : IRecognitionService
             null);
     }
 
-    private static RecognitionResult ParseCustomMatch(Match match, NamingConvention defaultConvention)
+    private static RecognitionResult ParseCustomMatch(
+        Match match,
+        NamingConvention defaultConvention,
+        IReadOnlyDictionary<AssetType, string> suffixes)
     {
         if (!match.Groups["cut"].Success)
         {
@@ -123,7 +133,7 @@ public sealed partial class RegexRecognitionService : IRecognitionService
                 versionTag);
         }
 
-        return BuildResult(episode, scene, cut, insert, match.Groups["type"].Value, versionTag);
+        return BuildResult(episode, scene, cut, insert, match.Groups["type"].Value, versionTag, suffixes);
     }
 
     private static VersionTag? ParseVersionGroup(Match match) =>
@@ -136,11 +146,12 @@ public sealed partial class RegexRecognitionService : IRecognitionService
         int cut,
         string? insertSuffix,
         string typeText,
-        VersionTag? versionTag)
+        VersionTag? versionTag,
+        IReadOnlyDictionary<AssetType, string> suffixes)
     {
         var episode = ExtractEpisode(convention);
         var scene = ExtractScene(convention);
-        return BuildResult(episode, scene, cut, insertSuffix, typeText, versionTag);
+        return BuildResult(episode, scene, cut, insertSuffix, typeText, versionTag, suffixes);
     }
 
     private static int ExtractEpisode(NamingConvention convention)
@@ -161,9 +172,10 @@ public sealed partial class RegexRecognitionService : IRecognitionService
         int cut,
         string? insertSuffix,
         string typeText,
-        VersionTag? versionTag)
+        VersionTag? versionTag,
+        IReadOnlyDictionary<AssetType, string> suffixes)
     {
-        var assetType = MapAssetType(typeText);
+        var assetType = MapAssetType(typeText, suffixes);
         if (assetType is null)
         {
             return new RecognitionResult(
@@ -182,25 +194,60 @@ public sealed partial class RegexRecognitionService : IRecognitionService
             versionTag);
     }
 
-    private static AssetType? MapAssetType(string typeText) =>
-        typeText switch
+    private static AssetType? MapAssetType(string typeText, IReadOnlyDictionary<AssetType, string> suffixes)
+    {
+        foreach (var pair in MergeTypeSuffixes(suffixes))
         {
-            "分镜" => AssetType.Storyboard,
-            "原画" => AssetType.Keyframe,
-            "动画" => AssetType.Inbetween,
-            "背景" => AssetType.Background,
-            "渲染" => AssetType.Render,
-            _ => null
+            if (string.Equals(pair.Value, typeText, StringComparison.OrdinalIgnoreCase))
+            {
+                return pair.Key;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyDictionary<AssetType, string> MergeTypeSuffixes(
+        IReadOnlyDictionary<AssetType, string> typeSuffixes)
+    {
+        var merged = new Dictionary<AssetType, string>
+        {
+            [AssetType.Storyboard] = "分镜",
+            [AssetType.Keyframe] = "原画",
+            [AssetType.Inbetween] = "动画",
+            [AssetType.Background] = "背景",
+            [AssetType.Render] = "渲染"
         };
 
-    [GeneratedRegex(@"^EP(?<ep>\d+)_S(?<sc>\d+)_C(?<cut>\d+)(?<insert>[a-z]?)_(?<type>分镜|原画|动画|背景|渲染)(?:_(?<version>v\d+|draft|s))?$", RegexOptions.IgnoreCase)]
-    private static partial Regex StandardCutPattern();
+        foreach (var pair in typeSuffixes)
+        {
+            merged[pair.Key] = pair.Value;
+        }
 
-    [GeneratedRegex(@"^C(?<cut>\d+)(?<insert>[a-z]?)_(?<type>分镜|原画|动画|背景|渲染)(?:_(?<version>v\d+|draft|s))?$", RegexOptions.IgnoreCase)]
-    private static partial Regex SimpleCutPattern();
+        return merged;
+    }
 
-    [GeneratedRegex(@"^(?<cut>\d+)卡(?<type>分镜|原画|动画|背景|渲染)$")]
-    private static partial Regex ChineseCardPattern();
+    private static Regex BuildStandardPattern(IReadOnlyDictionary<AssetType, string> suffixes)
+    {
+        var typeGroup = RecognitionPatternCompiler.BuildTypeGroup(suffixes);
+        return new Regex(
+            $"^EP(?<ep>\\d+)_S(?<sc>\\d+)_C(?<cut>\\d+)(?<insert>[a-z]?)_{typeGroup}(?:_(?<version>v\\d+|draft|s))?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static Regex BuildSimplePattern(IReadOnlyDictionary<AssetType, string> suffixes)
+    {
+        var typeGroup = RecognitionPatternCompiler.BuildTypeGroup(suffixes);
+        return new Regex(
+            $"^C(?<cut>\\d+)(?<insert>[a-z]?)_{typeGroup}(?:_(?<version>v\\d+|draft|s))?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static Regex BuildChineseCardPattern(IReadOnlyDictionary<AssetType, string> suffixes)
+    {
+        var typeGroup = RecognitionPatternCompiler.BuildTypeGroup(suffixes);
+        return new Regex($"^(?<cut>\\d+)卡{typeGroup}$", RegexOptions.CultureInvariant);
+    }
 
     [GeneratedRegex(@"^第(?<cut>\d+)卡$")]
     private static partial Regex OrdinalCardPattern();

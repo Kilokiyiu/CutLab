@@ -39,12 +39,13 @@ public static class ArchivePlanBuilder
         AnimationProject project,
         ScanSession session,
         IArchivePathResolver pathResolver,
-        ArchiveExecutionMode mode)
+        ArchiveExecutionMode mode,
+        ConflictResolutionStrategy conflictStrategy = ConflictResolutionStrategy.Fail)
     {
         return mode switch
         {
             ArchiveExecutionMode.CreateDirectoriesOnly => BuildDirectoryPlan(project, session, pathResolver),
-            ArchiveExecutionMode.MoveFiles => BuildMovePlan(project, session, pathResolver),
+            ArchiveExecutionMode.MoveFiles => BuildMovePlan(project, session, pathResolver, conflictStrategy),
             _ => []
         };
     }
@@ -106,7 +107,8 @@ public static class ArchivePlanBuilder
     private static IReadOnlyList<ArchivePlanItem> BuildMovePlan(
         AnimationProject project,
         ScanSession session,
-        IArchivePathResolver pathResolver)
+        IArchivePathResolver pathResolver,
+        ConflictResolutionStrategy conflictStrategy)
     {
         var items = new List<ArchivePlanItem>();
         var targetPaths = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -142,42 +144,34 @@ public static class ArchivePlanBuilder
 
             var resolvedPath = resolved.Value!;
             var targetFilePath = Path.Combine(resolvedPath.Value, fileName);
-            var targetPath = new FilePath(targetFilePath);
+            var proposedFileName = new FileName(fileName);
 
             if (string.Equals(asset.OriginalPath.Value, targetFilePath, StringComparison.OrdinalIgnoreCase))
             {
                 items.Add(new ArchivePlanItem(
                     asset.OriginalPath,
-                    targetPath,
-                    new FileName(fileName),
+                    new FilePath(targetFilePath),
+                    proposedFileName,
                     ArchivePlanStatus.AlreadyInPlace,
                     ArchiveOperationKind.MoveFile,
                     "文件已在目标位置。"));
                 continue;
             }
 
-            if (targetPaths.ContainsKey(targetFilePath)
-                || (File.Exists(targetFilePath)
-                    && !string.Equals(asset.OriginalPath.Value, targetFilePath, StringComparison.OrdinalIgnoreCase)))
-            {
-                items.Add(new ArchivePlanItem(
-                    asset.OriginalPath,
-                    targetPath,
-                    new FileName(fileName),
-                    ArchivePlanStatus.Conflict,
-                    ArchiveOperationKind.MoveFile,
-                    "目标文件已存在。"));
-                continue;
-            }
+            var resolution = TargetPathConflictResolver.ResolveArchiveMove(
+                targetFilePath,
+                proposedFileName,
+                asset.Id,
+                targetPaths,
+                conflictStrategy);
 
-            targetPaths[targetFilePath] = asset.Id;
             items.Add(new ArchivePlanItem(
                 asset.OriginalPath,
-                targetPath,
-                new FileName(fileName),
-                ArchivePlanStatus.Ready,
+                resolution.TargetPath,
+                resolution.FileName,
+                resolution.Status,
                 ArchiveOperationKind.MoveFile,
-                null));
+                resolution.Message));
         }
 
         return items;

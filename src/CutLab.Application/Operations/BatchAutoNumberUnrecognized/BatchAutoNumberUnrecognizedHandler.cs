@@ -14,7 +14,8 @@ public sealed record BatchAutoNumberUnrecognizedCommand(
     Guid SessionId,
     int StartCutNumber,
     AssetType DefaultAssetType,
-    bool DryRun);
+    bool DryRun,
+    ConflictResolutionStrategy ConflictStrategy = ConflictResolutionStrategy.Fail);
 
 public sealed record BatchAutoNumberUnrecognizedResult(
     bool DryRun,
@@ -53,6 +54,7 @@ public sealed partial class BatchAutoNumberUnrecognizedHandler
 
     public async Task<Result<BatchAutoNumberUnrecognizedResult>> HandleAsync(
         BatchAutoNumberUnrecognizedCommand command,
+        IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (command.StartCutNumber < 1)
@@ -96,7 +98,8 @@ public sealed partial class BatchAutoNumberUnrecognizedHandler
             scene,
             command.StartCutNumber,
             command.DefaultAssetType,
-            versionTag);
+            versionTag,
+            command.ConflictStrategy);
 
         var readyItems = items.Where(item => item.Status == RenamePlanStatus.Ready).ToList();
         var endCut = items
@@ -131,7 +134,7 @@ public sealed partial class BatchAutoNumberUnrecognizedHandler
             batch.AddEntry(OperationKind.Rename, item.SourcePath, item.TargetPath);
         }
 
-        await _fileSystemGateway.ApplyOperationsAsync(batch, progress: null, cancellationToken);
+        await _fileSystemGateway.ApplyOperationsAsync(batch, progress, cancellationToken);
 
         var completeResult = batch.Complete();
         if (completeResult.IsFailure)
@@ -163,7 +166,8 @@ public sealed partial class BatchAutoNumberUnrecognizedHandler
         int scene,
         int startCutNumber,
         AssetType defaultAssetType,
-        VersionTag? versionTag)
+        VersionTag? versionTag,
+        ConflictResolutionStrategy conflictStrategy)
     {
         var items = new List<RenamePlanItem>();
         var targetPaths = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -224,26 +228,20 @@ public sealed partial class BatchAutoNumberUnrecognizedHandler
                 continue;
             }
 
-            if (targetPaths.ContainsKey(targetFullPath) || File.Exists(targetFullPath))
-            {
-                items.Add(new RenamePlanItem(
-                    asset.Id,
-                    asset.OriginalPath,
-                    targetPath,
-                    naming.Value,
-                    RenamePlanStatus.Conflict,
-                    "目标文件名冲突。"));
-                continue;
-            }
+            var resolution = TargetPathConflictResolver.ResolveRename(
+                targetFullPath,
+                naming.Value,
+                asset.Id,
+                targetPaths,
+                conflictStrategy);
 
-            targetPaths[targetFullPath] = asset.Id;
             items.Add(new RenamePlanItem(
                 asset.Id,
                 asset.OriginalPath,
-                targetPath,
-                naming.Value,
-                RenamePlanStatus.Ready,
-                null));
+                resolution.TargetPath,
+                resolution.ProposedFileName,
+                resolution.Status,
+                resolution.Message));
         }
 
         return items;

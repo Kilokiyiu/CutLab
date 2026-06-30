@@ -9,6 +9,8 @@ public sealed class UserPreferences
     public double ShotColTargetWidth { get; set; } = 200;
 
     public double ShotColStatusWidth { get; set; } = 80;
+
+    public int ConflictResolutionStrategy { get; set; }
 }
 
 public interface IUserPreferencesStore

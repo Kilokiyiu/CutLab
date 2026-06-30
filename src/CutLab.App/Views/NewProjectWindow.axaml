@@ -1,21 +1,21 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:CutLab.App.ViewModels"
-        x:Class="CutLab.App.Views.ProjectSettingsWindow"
-        x:DataType="vm:ProjectSettingsViewModel"
-        Title="项目设置"
+        x:Class="CutLab.App.Views.NewProjectWindow"
+        x:DataType="vm:NewProjectViewModel"
+        Title="新建项目"
         Width="640"
-        Height="820"
+        Height="680"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
 
-    <Grid RowDefinitions="*,Auto,Auto" Margin="24">
+    <Grid RowDefinitions="*,Auto" Margin="24">
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="12">
-                <TextBlock Text="项目设置" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="新建项目" FontSize="22" FontWeight="Bold"/>
 
                 <StackPanel Spacing="4">
-                    <TextBlock Text="内置规则模板"/>
+                    <TextBlock Text="规则模板"/>
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <ComboBox Grid.Column="0"
                                   ItemsSource="{Binding AvailableTemplates}"
@@ -27,8 +27,8 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                         <Button Grid.Column="1"
-                                Content="加载模板"
-                                Command="{Binding LoadSelectedTemplateCommand}"/>
+                                Content="应用模板"
+                                Command="{Binding ApplySelectedTemplateCommand}"/>
                     </Grid>
                     <TextBlock Opacity="0.6"
                                FontSize="12"
@@ -46,21 +46,25 @@
                 </StackPanel>
 
                 <StackPanel Spacing="4">
-                    <TextBlock Text="命名模板"/>
-                    <TextBox Text="{Binding NamingTemplate}"/>
-                    <TextBlock Opacity="0.6" FontSize="12" Text="示例: EP{EP:02}_S{SC:02}_C{CUT:03}_{TYPE}"/>
+                    <TextBlock Text="素材文件夹"/>
+                    <TextBox Text="{Binding SourcePath}" IsReadOnly="True"/>
+                    <TextBlock Opacity="0.6" FontSize="12" Text="在下一步通过浏览选择文件夹"/>
                 </StackPanel>
 
-            <StackPanel Spacing="4">
-                <TextBlock Text="命名分隔符"/>
-                <TextBox Text="{Binding NamingSeparator}"/>
-                <TextBlock Opacity="0.6" FontSize="12" Text="默认 _，用于部分内置识别规则"/>
-            </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="归档根路径"/>
+                    <TextBox Text="{Binding RootPath}"/>
+                    <TextBlock Opacity="0.6" FontSize="12" Text="默认取素材文件夹的上一级目录"/>
+                </StackPanel>
 
-            <StackPanel Spacing="4">
-                <TextBlock Text="归档路径模板"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="命名模板"/>
+                    <TextBox Text="{Binding NamingTemplate}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="归档路径模板"/>
                     <TextBox Text="{Binding ArchivePathPattern}"/>
-                    <TextBlock Opacity="0.6" FontSize="12" Text="示例: EP{EP:02}/S{SC:02}/C{CUT:03}/{TYPE}"/>
                 </StackPanel>
 
                 <StackPanel Spacing="4">
@@ -80,35 +84,8 @@
                     <TextBlock Text="识别规则（每行一条）"/>
                     <TextBox Text="{Binding RecognitionPatternsText}"
                              AcceptsReturn="True"
-                             MinHeight="88"
+                             MinHeight="72"
                              TextWrapping="Wrap"/>
-                    <TextBlock Opacity="0.6"
-                               FontSize="12"
-                               Text="支持模板 token（{N}、{EP}、{SC}、{CUT}、{TYPE}）或以 ^ 开头的正则表达式"/>
-                </StackPanel>
-
-            <StackPanel Spacing="4">
-                <CheckBox Content="启用帧序列绑定（F11）" IsChecked="{Binding FrameSequenceEnabled}"/>
-                <TextBlock Text="帧序列文件名模板"/>
-                <TextBox Text="{Binding FrameSequencePattern}"/>
-                <TextBlock Opacity="0.6" FontSize="12" Text="示例: C{CUT:03}_{FRAME:03}，必须包含 {FRAME}"/>
-                <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8">
-                    <TextBlock Grid.Column="0" Text="最小帧" VerticalAlignment="Center"/>
-                    <NumericUpDown Grid.Column="1" Minimum="1" Maximum="999" Value="{Binding FrameSequenceMinFrame}"/>
-                    <TextBlock Grid.Column="2" Text="最大帧" VerticalAlignment="Center"/>
-                    <NumericUpDown Grid.Column="3" Minimum="1" Maximum="999" Value="{Binding FrameSequenceMaxFrame}"/>
-                </Grid>
-            </StackPanel>
-
-            <StackPanel Spacing="4">
-                <TextBlock Text="归档根路径"/>
-                    <TextBox Text="{Binding RootPath}"/>
-                </StackPanel>
-
-                <StackPanel Spacing="4">
-                    <TextBlock Text="默认版本标签（可选）"/>
-                    <TextBox Text="{Binding DefaultVersionTag}"/>
-                    <TextBlock Opacity="0.6" FontSize="12" Text="示例: v1、draft、s；留空则不附加"/>
                 </StackPanel>
 
                 <TextBlock Text="{Binding ErrorMessage}" Foreground="IndianRed" TextWrapping="Wrap"/>
@@ -117,7 +94,8 @@
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
             <Button Content="取消" IsCancel="True" Click="CancelButton_OnClick"/>
-            <Button Content="保存" IsDefault="True" Click="SaveButton_OnClick"/>
+            <Button Content="浏览文件夹..." Click="BrowseButton_OnClick"/>
+            <Button Content="创建" IsDefault="True" Click="CreateButton_OnClick"/>
         </StackPanel>
     </Grid>
 </Window>

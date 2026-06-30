@@ -1,6 +1,7 @@
 namespace CutLab.Infrastructure.Persistence;
 
 using System.Text.Json;
+using CutLab.Application.Common;
 using CutLab.Application.Common.Interfaces;
 using CutLab.Domain.Cuts;
 using CutLab.Domain.Operations;
@@ -89,15 +90,27 @@ internal sealed class AnimationProjectDto
 
     public string NamingTemplate { get; set; } = "EP{EP:02}_S{SC:02}_C{CUT:03}_{TYPE}";
 
+    public string NamingSeparator { get; set; } = "_";
+
     public string ArchivePathPattern { get; set; } = "{EP:02}/S{SC:02}/C{CUT:03}/{TYPE}/";
 
     public List<string> ArchiveFolders { get; set; } = ["分镜", "原画", "动画", "背景", "渲染"];
 
     public List<string> RecognitionPatterns { get; set; } = [];
 
+    public List<string> TypeSuffixes { get; set; } = ["分镜", "原画", "动画", "背景", "渲染"];
+
     public string RootPath { get; set; } = string.Empty;
 
     public string? DefaultVersionTag { get; set; }
+
+    public bool FrameSequenceEnabled { get; set; }
+
+    public string FrameSequencePattern { get; set; } = "C{CUT:03}_{FRAME:03}";
+
+    public int FrameSequenceMinFrame { get; set; } = 1;
+
+    public int FrameSequenceMaxFrame { get; set; } = 99;
 
     public DateTimeOffset CreatedAt { get; set; }
 
@@ -110,24 +123,44 @@ internal sealed class AnimationProjectDto
             Name = project.Name,
             Episode = project.Episode.Value,
             NamingTemplate = project.NamingConvention.Template,
+            NamingSeparator = project.NamingConvention.Separator,
             ArchivePathPattern = project.ArchiveTemplate.PathPattern,
             ArchiveFolders = project.ArchiveTemplate.FolderNames.ToList(),
             RecognitionPatterns = project.RecognitionPatterns.Select(pattern => pattern.Pattern).ToList(),
+            TypeSuffixes = TypeSuffixesParser.ToOrderedList(project.NamingConvention.TypeSuffixes),
             RootPath = project.RootPath.Value,
             DefaultVersionTag = project.DefaultVersionTag?.Value,
+            FrameSequenceEnabled = project.FrameSequenceSettings.Enabled,
+            FrameSequencePattern = project.FrameSequenceSettings.FileNamePattern,
+            FrameSequenceMinFrame = project.FrameSequenceSettings.MinFrame,
+            FrameSequenceMaxFrame = project.FrameSequenceSettings.MaxFrame,
             CreatedAt = project.CreatedAt,
             UpdatedAt = project.UpdatedAt
         };
 
     public AnimationProject? ToDomain()
     {
+        var suffixes = TypeSuffixes.Count > 0
+            ? TypeSuffixesParser.Parse(string.Join(", ", TypeSuffixes))
+            : TypeSuffixesParser.Default();
+
         var naming = NamingConvention.Create(
             NamingTemplate,
-            "_",
-            DefaultTypeSuffixes());
+            string.IsNullOrWhiteSpace(NamingSeparator) ? "_" : NamingSeparator,
+            suffixes);
 
         var archive = ArchiveTemplate.Create(ArchivePathPattern, ArchiveFolders);
         if (naming.IsFailure || archive.IsFailure || naming.Value is null || archive.Value is null)
+        {
+            return null;
+        }
+
+        var frameSettings = FrameSequenceSettings.Create(
+            FrameSequenceEnabled,
+            FrameSequencePattern,
+            FrameSequenceMinFrame,
+            FrameSequenceMaxFrame);
+        if (frameSettings.IsFailure || frameSettings.Value is null)
         {
             return null;
         }
@@ -147,16 +180,7 @@ internal sealed class AnimationProjectDto
             UpdatedAt == default ? DateTimeOffset.UtcNow : UpdatedAt,
             string.IsNullOrWhiteSpace(DefaultVersionTag)
                 ? null
-                : VersionTagParser.TryParse(DefaultVersionTag));
+                : VersionTagParser.TryParse(DefaultVersionTag),
+            frameSettings.Value);
     }
-
-    private static IReadOnlyDictionary<AssetType, string> DefaultTypeSuffixes() =>
-        new Dictionary<AssetType, string>
-        {
-            [AssetType.Storyboard] = "分镜",
-            [AssetType.Keyframe] = "原画",
-            [AssetType.Inbetween] = "动画",
-            [AssetType.Background] = "背景",
-            [AssetType.Render] = "渲染"
-        };
 }

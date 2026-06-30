@@ -22,15 +22,27 @@ public sealed class ProjectConfigDocument
 
     public string NamingTemplate { get; set; } = "EP{EP:02}_S{SC:02}_C{CUT:03}_{TYPE}";
 
-    public string ArchivePathPattern { get; set; } = "EP{EP:02}/S{SC:02}/C{CUT:03}/{TYPE}";
+    public string NamingSeparator { get; set; } = "_";
+
+    public string ArchivePathPattern { get; set; } = "{EP:02}/S{SC:02}/C{CUT:03}/{TYPE}";
 
     public List<string> ArchiveFolders { get; set; } = ["分镜", "原画", "动画", "背景", "渲染"];
 
     public List<string> RecognitionPatterns { get; set; } = [];
 
+    public Dictionary<string, string> TypeSuffixes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public string? DefaultVersionTag { get; set; }
 
     public string? RootPath { get; set; }
+
+    public bool FrameSequenceEnabled { get; set; }
+
+    public string FrameSequencePattern { get; set; } = "C{CUT:03}_{FRAME:03}";
+
+    public int FrameSequenceMinFrame { get; set; } = 1;
+
+    public int FrameSequenceMaxFrame { get; set; } = 99;
 
     public static ProjectConfigDocument FromProject(AnimationProject project, bool includeRootPath) =>
         new()
@@ -40,10 +52,16 @@ public sealed class ProjectConfigDocument
             Name = project.Name,
             Episode = project.Episode.Value,
             NamingTemplate = project.NamingConvention.Template,
+            NamingSeparator = project.NamingConvention.Separator,
             ArchivePathPattern = project.ArchiveTemplate.PathPattern,
             ArchiveFolders = project.ArchiveTemplate.FolderNames.ToList(),
             RecognitionPatterns = project.RecognitionPatterns.Select(pattern => pattern.Pattern).ToList(),
+            TypeSuffixes = TypeSuffixesParser.ToTemplateDictionary(project.NamingConvention.TypeSuffixes),
             DefaultVersionTag = project.DefaultVersionTag?.Value,
+            FrameSequenceEnabled = project.FrameSequenceSettings.Enabled,
+            FrameSequencePattern = project.FrameSequenceSettings.FileNamePattern,
+            FrameSequenceMinFrame = project.FrameSequenceSettings.MinFrame,
+            FrameSequenceMaxFrame = project.FrameSequenceSettings.MaxFrame,
             RootPath = includeRootPath ? project.RootPath.Value : null
         };
 
@@ -59,7 +77,10 @@ public sealed class ProjectConfigDocument
             return Result.Failure("项目名称不能为空。");
         }
 
-        var naming = NamingConvention.Create(NamingTemplate, "_", DefaultTypeSuffixes());
+        var naming = NamingConvention.Create(
+            NamingTemplate,
+            string.IsNullOrWhiteSpace(NamingSeparator) ? "_" : NamingSeparator,
+            ResolveTypeSuffixes());
         if (naming.IsFailure)
         {
             return Result.Failure(naming.Error ?? "命名规则无效。");
@@ -74,6 +95,16 @@ public sealed class ProjectConfigDocument
         if (!string.IsNullOrWhiteSpace(DefaultVersionTag) && VersionTagParser.TryParse(DefaultVersionTag) is null)
         {
             return Result.Failure("版本标签格式无效（支持 v1、draft、s 等）。");
+        }
+
+        var frameSettings = FrameSequenceSettings.Create(
+            FrameSequenceEnabled,
+            FrameSequencePattern,
+            FrameSequenceMinFrame,
+            FrameSequenceMaxFrame);
+        if (frameSettings.IsFailure)
+        {
+            return Result.Failure(frameSettings.Error ?? "帧序列设置无效。");
         }
 
         return Result.Success();
@@ -104,7 +135,13 @@ public sealed class ProjectConfigDocument
                 RecognitionPatterns
                     .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
                     .Select(pattern => new RecognitionPattern(pattern.Trim()))
-                    .ToList())));
+                    .ToList()),
+            TypeSuffixesParser.Format(ResolveTypeSuffixes()),
+            NamingSeparator,
+            FrameSequenceEnabled,
+            FrameSequencePattern,
+            FrameSequenceMinFrame,
+            FrameSequenceMaxFrame));
     }
 
     public Result<UpdateProjectSettingsCommand> ToUpdateProjectSettingsCommand(ProjectId projectId, string fallbackRootPath)
@@ -126,6 +163,7 @@ public sealed class ProjectConfigDocument
             Name.Trim(),
             Episode,
             NamingTemplate,
+            NamingSeparator,
             ArchivePathPattern,
             string.Join(", ", ArchiveFolders),
             rootPath.Trim(),
@@ -134,16 +172,14 @@ public sealed class ProjectConfigDocument
                 RecognitionPatterns
                     .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
                     .Select(pattern => new RecognitionPattern(pattern.Trim()))
-                    .ToList())));
+                    .ToList()),
+            TypeSuffixesParser.Format(ResolveTypeSuffixes()),
+            FrameSequenceEnabled,
+            FrameSequencePattern,
+            FrameSequenceMinFrame,
+            FrameSequenceMaxFrame));
     }
 
-    private static IReadOnlyDictionary<AssetType, string> DefaultTypeSuffixes() =>
-        new Dictionary<AssetType, string>
-        {
-            [AssetType.Storyboard] = "分镜",
-            [AssetType.Keyframe] = "原画",
-            [AssetType.Inbetween] = "动画",
-            [AssetType.Background] = "背景",
-            [AssetType.Render] = "渲染"
-        };
+    private IReadOnlyDictionary<AssetType, string> ResolveTypeSuffixes() =>
+        TypeSuffixesParser.FromTemplateDictionary(TypeSuffixes);
 }

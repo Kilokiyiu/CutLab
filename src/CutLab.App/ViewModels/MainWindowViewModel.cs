@@ -9,12 +9,14 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CutLab.App.Services;
 using CutLab.Application.Common;
+using CutLab.Application.Common.Interfaces;
 using CutLab.Application.Operations.BatchAutoNumberUnrecognized;
 using CutLab.Application.Operations.ExecuteArchive;
 using CutLab.Application.Operations.ExecuteRename;
 using CutLab.Application.Operations.InsertCut;
 using CutLab.Application.Operations.ReorderCuts;
 using CutLab.Application.Operations.UndoLastOperation;
+using CutLab.Application.Operations.ListOperationHistory;
 using CutLab.Application.Projects.GetProject;
 using CutLab.Application.Projects.ProjectConfig;
 using CutLab.Application.Projects.CreateProject;
@@ -23,14 +25,18 @@ using CutLab.Application.Reporting.ExportCutList;
 using CutLab.Application.Reporting.ExportProgressReport;
 using CutLab.Application.Reporting.GeneratePreviewVideo;
 using CutLab.Application.Reporting.ExportMissingCuts;
+using CutLab.Application.Reporting.AnalyzeFrameSequences;
+using CutLab.Application.Reporting.ExportFrameSequenceIssues;
 using CutLab.Application.Reporting.GetMissingCutsFromSession;
 using CutLab.Application.Projects.DeleteProject;
 using CutLab.Application.Scanning.GetScanPreview;
 using CutLab.Application.Scanning.ScanFolder;
 using CutLab.Domain.Projects;
+using CutLab.Domain.Operations;
 using CutLab.Domain.ValueObjects;
 using Avalonia.Media.Imaging;
 using Avalonia.Controls;
+using Avalonia.Threading;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
@@ -54,7 +60,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ExportProjectConfigHandler _exportProjectConfigHandler;
     private readonly ImportProjectConfigHandler _importProjectConfigHandler;
     private readonly ExportMissingCutsHandler _exportMissingCutsHandler;
+    private readonly AnalyzeFrameSequencesFromSessionHandler _analyzeFrameSequencesHandler;
+    private readonly ExportFrameSequenceIssuesHandler _exportFrameSequenceIssuesHandler;
     private readonly DeleteProjectHandler _deleteProjectHandler;
+    private readonly ListOperationHistoryHandler _listOperationHistoryHandler;
+    private readonly IPreviewVideoGenerator _previewVideoGenerator;
     private readonly IUserPreferencesStore _userPreferencesStore;
 
     private ProjectId? _currentProjectId;
@@ -82,7 +92,11 @@ public partial class MainWindowViewModel : ViewModelBase
         ExportProjectConfigHandler exportProjectConfigHandler,
         ImportProjectConfigHandler importProjectConfigHandler,
         ExportMissingCutsHandler exportMissingCutsHandler,
+        AnalyzeFrameSequencesFromSessionHandler analyzeFrameSequencesHandler,
+        ExportFrameSequenceIssuesHandler exportFrameSequenceIssuesHandler,
         DeleteProjectHandler deleteProjectHandler,
+        ListOperationHistoryHandler listOperationHistoryHandler,
+        IPreviewVideoGenerator previewVideoGenerator,
         IUserPreferencesStore userPreferencesStore)
     {
         _fileDialogService = fileDialogService;
@@ -105,7 +119,11 @@ public partial class MainWindowViewModel : ViewModelBase
         _exportProjectConfigHandler = exportProjectConfigHandler;
         _importProjectConfigHandler = importProjectConfigHandler;
         _exportMissingCutsHandler = exportMissingCutsHandler;
+        _analyzeFrameSequencesHandler = analyzeFrameSequencesHandler;
+        _exportFrameSequenceIssuesHandler = exportFrameSequenceIssuesHandler;
         _deleteProjectHandler = deleteProjectHandler;
+        _listOperationHistoryHandler = listOperationHistoryHandler;
+        _previewVideoGenerator = previewVideoGenerator;
         _userPreferencesStore = userPreferencesStore;
 
         var columnPreferences = _userPreferencesStore.Load();
@@ -113,13 +131,19 @@ public partial class MainWindowViewModel : ViewModelBase
         _shotColSourceWidth = new GridLength(Math.Max(64, columnPreferences.ShotColSourceWidth));
         _shotColTargetWidth = new GridLength(Math.Max(64, columnPreferences.ShotColTargetWidth));
         _shotColStatusWidth = new GridLength(Math.Max(48, columnPreferences.ShotColStatusWidth));
+        SelectedConflictStrategy = ConflictStrategyOption.All
+            .FirstOrDefault(option => (int)option.Strategy == columnPreferences.ConflictResolutionStrategy)
+            ?? ConflictStrategyOption.All[0];
 
         PreviewItems = [];
         PreviewItems.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShotListTitle));
         RecentProjects = [];
         CutGallery = [];
+        OperationHistoryItems = [];
         _ = InitializeAsync();
     }
+
+    public IReadOnlyList<ConflictStrategyOption> ConflictStrategyOptions { get; } = ConflictStrategyOption.All;
 
     public string Title { get; } = "CutLab";
 
@@ -153,10 +177,42 @@ public partial class MainWindowViewModel : ViewModelBase
     private string _missingCutsSummary = string.Empty;
 
     [ObservableProperty]
+    private string _frameSequenceSummary = string.Empty;
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
     private bool _scanRecursive;
+
+    [ObservableProperty]
+    private bool _dryRunOnly;
+
+    [ObservableProperty]
+    private ConflictStrategyOption? _selectedConflictStrategy;
+
+    [ObservableProperty]
+    private bool _showOperationProgress;
+
+    [ObservableProperty]
+    private double _operationProgressValue;
+
+    [ObservableProperty]
+    private double _operationProgressMaximum;
+
+    [ObservableProperty]
+    private string _operationProgressText = string.Empty;
+
+    [ObservableProperty]
+    private int _undoableCount;
+
+    public bool HasUndoableOperations => UndoableCount > 0;
+
+    partial void OnUndoableCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasUndoableOperations));
+        UndoCommand.NotifyCanExecuteChanged();
+    }
 
     [ObservableProperty]
     private ProjectListItemViewModel? _selectedProject;
@@ -196,13 +252,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public void PersistColumnWidths()
     {
-        _userPreferencesStore.Save(new UserPreferences
-        {
-            ShotColCutWidth = ShotColCutWidth.Value,
-            ShotColSourceWidth = ShotColSourceWidth.Value,
-            ShotColTargetWidth = ShotColTargetWidth.Value,
-            ShotColStatusWidth = ShotColStatusWidth.Value
-        });
+        var preferences = _userPreferencesStore.Load();
+        preferences.ShotColCutWidth = ShotColCutWidth.Value;
+        preferences.ShotColSourceWidth = ShotColSourceWidth.Value;
+        preferences.ShotColTargetWidth = ShotColTargetWidth.Value;
+        preferences.ShotColStatusWidth = ShotColStatusWidth.Value;
+        _userPreferencesStore.Save(preferences);
     }
 
     partial void OnShotColCutWidthChanged(GridLength value) => PersistColumnWidths();
@@ -213,11 +268,29 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnShotColStatusWidthChanged(GridLength value) => PersistColumnWidths();
 
+    partial void OnSelectedConflictStrategyChanged(ConflictStrategyOption? value) => PersistUserPreferences();
+
+    private ConflictResolutionStrategy CurrentConflictStrategy =>
+        SelectedConflictStrategy?.Strategy ?? ConflictResolutionStrategy.Fail;
+
+    private void PersistUserPreferences()
+    {
+        var preferences = _userPreferencesStore.Load();
+        preferences.ShotColCutWidth = ShotColCutWidth.Value;
+        preferences.ShotColSourceWidth = ShotColSourceWidth.Value;
+        preferences.ShotColTargetWidth = ShotColTargetWidth.Value;
+        preferences.ShotColStatusWidth = ShotColStatusWidth.Value;
+        preferences.ConflictResolutionStrategy = (int)CurrentConflictStrategy;
+        _userPreferencesStore.Save(preferences);
+    }
+
     public ObservableCollection<PreviewRowViewModel> PreviewItems { get; }
 
     public ObservableCollection<ProjectListItemViewModel> RecentProjects { get; }
 
     public ObservableCollection<CutGalleryItemViewModel> CutGallery { get; }
+
+    public ObservableCollection<OperationHistoryItemViewModel> OperationHistoryItems { get; }
 
     public string ShotListTitle =>
         PreviewItems.Count == 0
@@ -237,14 +310,15 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        await RunOperationAsync($"正在调整卡号 C{movedCut:D3}...", async () =>
+        await RunOperationAsync($"正在调整卡号 C{movedCut:D3}...", async progress =>
         {
             var preview = await _reorderCutsHandler.HandleAsync(new ReorderCutsCommand(
                 _currentProjectId.Value,
                 _currentSessionId.Value,
                 movedCut,
                 targetIndex,
-                DryRun: true));
+                DryRun: true,
+                ConflictStrategy: CurrentConflictStrategy));
 
             if (preview.IsFailure || preview.Value is null)
             {
@@ -262,12 +336,15 @@ public partial class MainWindowViewModel : ViewModelBase
                 return "卡号顺序未发生变化。";
             }
 
-            var result = await _reorderCutsHandler.HandleAsync(new ReorderCutsCommand(
-                _currentProjectId.Value,
-                _currentSessionId.Value,
-                movedCut,
-                targetIndex,
-                DryRun: false));
+            var result = await _reorderCutsHandler.HandleAsync(
+                new ReorderCutsCommand(
+                    _currentProjectId.Value,
+                    _currentSessionId.Value,
+                    movedCut,
+                    targetIndex,
+                    DryRun: false,
+                    ConflictStrategy: CurrentConflictStrategy),
+                progress);
 
             if (result.IsFailure || result.Value is null)
             {
@@ -380,8 +457,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanManageProjects))]
     private async Task NewProjectAsync()
     {
-        var folder = await _fileDialogService.PickFolderAsync();
-        if (string.IsNullOrWhiteSpace(folder))
+        var dialogResult = await _windowService.ShowNewProjectAsync();
+        if (dialogResult is null)
         {
             return;
         }
@@ -389,22 +466,7 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             IsBusy = true;
-            var projectName = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            if (string.IsNullOrWhiteSpace(projectName))
-            {
-                projectName = "CutLab Project";
-            }
-
-            var archiveRoot = Path.GetDirectoryName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-                ?? folder;
-
-            var result = await _createProjectHandler.HandleAsync(new CreateProjectCommand(
-                projectName,
-                Episode: 1,
-                NamingTemplate: "EP{EP:02}_S{SC:02}_C{CUT:03}_{TYPE}",
-                ArchivePathPattern: "EP{EP:02}/S{SC:02}/C{CUT:03}/{TYPE}",
-                ArchiveFolders: ["分镜", "原画", "动画", "背景", "渲染"],
-                RootPath: archiveRoot));
+            var result = await _createProjectHandler.HandleAsync(dialogResult.Command);
 
             if (result.IsFailure)
             {
@@ -413,15 +475,16 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             _currentProjectId = result.Value;
-            SourcePath = folder;
+            SourcePath = dialogResult.SourcePath;
             _currentSessionId = null;
             PreviewItems.Clear();
             CutGallery.Clear();
             SelectedPreviewRow = null;
             MissingCutsSummary = string.Empty;
+            FrameSequenceSummary = string.Empty;
 
             await RefreshRecentProjectsAsync();
-            StatusMessage = $"已新建项目：{projectName}";
+            StatusMessage = $"已新建项目：{dialogResult.Command.Name}";
         }
         catch (Exception ex)
         {
@@ -470,6 +533,7 @@ public partial class MainWindowViewModel : ViewModelBase
             IsBusy = true;
             StatusMessage = "正在扫描...";
             MissingCutsSummary = string.Empty;
+            FrameSequenceSummary = string.Empty;
 
             var projectId = await EnsureProjectAsync();
             if (projectId is null)
@@ -610,6 +674,7 @@ public partial class MainWindowViewModel : ViewModelBase
             CutGallery.Clear();
             SelectedPreviewRow = null;
             MissingCutsSummary = string.Empty;
+            FrameSequenceSummary = string.Empty;
 
             await RefreshRecentProjectsAsync();
             SelectedProject = RecentProjects.FirstOrDefault(project => project.Id == result.Value.ProjectId);
@@ -735,7 +800,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        await RunOperationAsync("正在执行插卡重命名...", async () =>
+        await RunOperationAsync("正在执行插卡重命名...", async progress =>
         {
             var preview = await _insertCutHandler.HandleAsync(new InsertCutCommand(
                 _currentProjectId.Value,
@@ -743,7 +808,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 InsertAfterCut,
                 InsertAssetType,
                 InsertUnrecognizedOnly,
-                DryRun: true));
+                DryRun: true,
+                ConflictStrategy: CurrentConflictStrategy));
 
             if (preview.IsFailure || preview.Value is null)
             {
@@ -761,13 +827,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 return $"插卡 {preview.Value.InsertCutNumber}：没有可重命名的文件。";
             }
 
-            var result = await _insertCutHandler.HandleAsync(new InsertCutCommand(
-                _currentProjectId.Value,
-                _currentSessionId.Value,
-                InsertAfterCut,
-                InsertAssetType,
-                InsertUnrecognizedOnly,
-                DryRun: false));
+            if (DryRunOnly)
+            {
+                return $"插卡预览：{preview.Value.InsertCutNumber}，可重命名 {preview.Value.ReadyCount} 个文件。（仅预览模式）";
+            }
+
+            var result = await _insertCutHandler.HandleAsync(
+                new InsertCutCommand(
+                    _currentProjectId.Value,
+                    _currentSessionId.Value,
+                    InsertAfterCut,
+                    InsertAssetType,
+                    InsertUnrecognizedOnly,
+                    DryRun: false,
+                    ConflictStrategy: CurrentConflictStrategy),
+                progress);
 
             if (result.IsFailure || result.Value is null)
             {
@@ -787,14 +861,15 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        await RunOperationAsync("正在自动编号重命名...", async () =>
+        await RunOperationAsync("正在自动编号重命名...", async progress =>
         {
             var preview = await _batchAutoNumberHandler.HandleAsync(new BatchAutoNumberUnrecognizedCommand(
                 _currentProjectId.Value,
                 _currentSessionId.Value,
                 InsertAfterCut,
                 InsertAssetType,
-                DryRun: true));
+                DryRun: true,
+                ConflictStrategy: CurrentConflictStrategy));
 
             if (preview.IsFailure || preview.Value is null)
             {
@@ -812,12 +887,20 @@ public partial class MainWindowViewModel : ViewModelBase
                 return "没有可自动编号的未识别文件。";
             }
 
-            var result = await _batchAutoNumberHandler.HandleAsync(new BatchAutoNumberUnrecognizedCommand(
-                _currentProjectId.Value,
-                _currentSessionId.Value,
-                InsertAfterCut,
-                InsertAssetType,
-                DryRun: false));
+            if (DryRunOnly)
+            {
+                return $"自动编号预览：C{preview.Value.StartCutNumber:D3}–C{preview.Value.EndCutNumber:D3}，可重命名 {preview.Value.ReadyCount} 个文件。（仅预览模式）";
+            }
+
+            var result = await _batchAutoNumberHandler.HandleAsync(
+                new BatchAutoNumberUnrecognizedCommand(
+                    _currentProjectId.Value,
+                    _currentSessionId.Value,
+                    InsertAfterCut,
+                    InsertAssetType,
+                    DryRun: false,
+                    ConflictStrategy: CurrentConflictStrategy),
+                progress);
 
             if (result.IsFailure || result.Value is null)
             {
@@ -835,6 +918,30 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_currentProjectId is null || _currentSessionId is null)
         {
             return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            StatusMessage = "正在检测 FFmpeg...";
+            NotifyCommandsChanged();
+
+            if (!await _previewVideoGenerator.IsAvailableAsync())
+            {
+                StatusMessage =
+                    "未检测到 FFmpeg。请从 https://ffmpeg.org/download.html 安装，并将 ffmpeg 加入系统 PATH 后重试。";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"FFmpeg 检测失败：{ex.Message}";
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+            NotifyCommandsChanged();
         }
 
         var outputPath = await _fileDialogService.SaveVideoFileAsync("CutLab_预览.mp4");
@@ -889,14 +996,30 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        await RunOperationAsync("正在执行重命名...", async () =>
+        await RunOperationAsync(DryRunOnly ? "正在预览重命名..." : "正在执行重命名...", async progress =>
         {
             var result = await _executeRenameHandler.HandleAsync(
-                new ExecuteRenameCommand(_currentProjectId.Value, _currentSessionId.Value, DryRun: false));
+                new ExecuteRenameCommand(
+                    _currentProjectId.Value,
+                    _currentSessionId.Value,
+                    DryRun: DryRunOnly,
+                    ConflictStrategy: CurrentConflictStrategy),
+                DryRunOnly ? null : progress);
 
             if (result.IsFailure || result.Value is null)
             {
                 return result.Error ?? "重命名失败。";
+            }
+
+            if (DryRunOnly)
+            {
+                PreviewItems.Clear();
+                foreach (var item in result.Value.Items)
+                {
+                    PreviewItems.Add(PreviewRowViewModel.FromRename(item));
+                }
+
+                return $"重命名预览：可执行 {result.Value.ReadyCount}，跳过 {result.Value.SkippedCount}。（仅预览模式）";
             }
 
             await RescanAsync();
@@ -963,6 +1086,51 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanDetectFrameSequences))]
+    private async Task DetectFrameSequencesAsync()
+    {
+        await LoadFrameSequenceAnalysisAsync(showFailureAsStatus: true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExportFrameSequences))]
+    private async Task ExportFrameSequencesAsync()
+    {
+        if (_currentProjectId is null || _currentSessionId is null)
+        {
+            return;
+        }
+
+        var outputPath = await _fileDialogService.SaveMissingCutsFileAsync("CutLab_帧序列问题.csv");
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            StatusMessage = "正在导出帧序列问题清单...";
+
+            var result = await _exportFrameSequenceIssuesHandler.HandleAsync(new ExportFrameSequenceIssuesCommand(
+                _currentProjectId.Value,
+                _currentSessionId.Value,
+                outputPath));
+
+            StatusMessage = result.IsSuccess
+                ? $"已导出帧序列问题清单（{result.Value!.RowCount} 项）到 {outputPath}"
+                : result.Error ?? "导出帧序列问题清单失败。";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"导出帧序列问题清单出错：{ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            NotifyCommandsChanged();
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanDeleteProject))]
     private async Task DeleteProjectAsync()
     {
@@ -998,6 +1166,7 @@ public partial class MainWindowViewModel : ViewModelBase
             CutGallery.Clear();
             SelectedPreviewRow = null;
             MissingCutsSummary = string.Empty;
+            FrameSequenceSummary = string.Empty;
 
             await RefreshRecentProjectsAsync();
             if (RecentProjects.Count > 0)
@@ -1041,7 +1210,9 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             await RescanAsync();
-            return $"已撤销 {result.Value.RevertedCount} 项操作。";
+            await RefreshOperationHistoryAsync();
+            var undoHint = UndoableCount > 0 ? $"（还可撤销 {UndoableCount} 步）" : string.Empty;
+            return $"已撤销 {result.Value.RevertedCount} 项操作。{undoHint}";
         });
     }
 
@@ -1052,13 +1223,16 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        await RunOperationAsync(progressMessage, async () =>
+        await RunOperationAsync(
+            DryRunOnly ? "正在预览归档..." : progressMessage,
+            async progress =>
         {
             var preview = await _executeArchiveHandler.HandleAsync(new ExecuteArchiveCommand(
                 _currentProjectId.Value,
                 _currentSessionId.Value,
                 mode,
-                DryRun: true));
+                DryRun: true,
+                ConflictStrategy: CurrentConflictStrategy));
 
             if (preview.IsFailure || preview.Value is null)
             {
@@ -1067,11 +1241,20 @@ public partial class MainWindowViewModel : ViewModelBase
 
             UpdatePreviewFromArchive(preview.Value.Items);
 
-            var result = await _executeArchiveHandler.HandleAsync(new ExecuteArchiveCommand(
-                _currentProjectId.Value,
-                _currentSessionId.Value,
-                mode,
-                DryRun: false));
+            if (DryRunOnly)
+            {
+                var previewAction = mode == ArchiveExecutionMode.CreateDirectoriesOnly ? "建目录" : "移动文件";
+                return $"{previewAction}预览：可执行 {preview.Value.ReadyCount}，跳过 {preview.Value.SkippedCount}。（仅预览模式）";
+            }
+
+            var result = await _executeArchiveHandler.HandleAsync(
+                new ExecuteArchiveCommand(
+                    _currentProjectId.Value,
+                    _currentSessionId.Value,
+                    mode,
+                    DryRun: false,
+                    ConflictStrategy: CurrentConflictStrategy),
+                progress);
 
             if (result.IsFailure || result.Value is null)
             {
@@ -1084,13 +1267,35 @@ public partial class MainWindowViewModel : ViewModelBase
         });
     }
 
-    private async Task RunOperationAsync(string progressMessage, Func<Task<string>> operation)
+    private async Task RunOperationAsync(string progressMessage, Func<Task<string>> operation) =>
+        await RunOperationAsync(progressMessage, _ => operation());
+
+    private async Task RunOperationAsync(
+        string progressMessage,
+        Func<IProgress<OperationProgress>, Task<string>> operation)
     {
         try
         {
             IsBusy = true;
+            ResetOperationProgress();
             StatusMessage = progressMessage;
-            StatusMessage = await operation();
+            OperationProgressText = progressMessage;
+
+            var progress = new Progress<OperationProgress>(report =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    OperationProgressMaximum = Math.Max(1, report.Total);
+                    OperationProgressValue = report.Completed;
+                    ShowOperationProgress = report.Total > 0;
+                    OperationProgressText = report.CurrentFile is null
+                        ? $"{progressMessage} ({report.Completed}/{report.Total})"
+                        : $"{progressMessage} ({report.Completed}/{report.Total})";
+                });
+            });
+
+            StatusMessage = await operation(progress);
+            await RefreshOperationHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -1098,8 +1303,48 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         finally
         {
+            ResetOperationProgress();
             IsBusy = false;
             NotifyCommandsChanged();
+        }
+    }
+
+    private void ResetOperationProgress()
+    {
+        ShowOperationProgress = false;
+        OperationProgressValue = 0;
+        OperationProgressMaximum = 1;
+        OperationProgressText = string.Empty;
+    }
+
+    private async Task RefreshOperationHistoryAsync()
+    {
+        OperationHistoryItems.Clear();
+        UndoableCount = 0;
+
+        if (_currentProjectId is null)
+        {
+            return;
+        }
+
+        var history = await _listOperationHistoryHandler.HandleAsync(
+            new ListOperationHistoryQuery(_currentProjectId.Value));
+
+        var firstApplied = true;
+        foreach (var item in history)
+        {
+            var canUndo = item.Status == BatchStatus.Applied && firstApplied;
+            if (item.Status == BatchStatus.Applied)
+            {
+                UndoableCount++;
+                firstApplied = false;
+            }
+
+            OperationHistoryItems.Add(new OperationHistoryItemViewModel(
+                item.BatchId,
+                item.Summary,
+                item.Status,
+                canUndo));
         }
     }
 
@@ -1180,6 +1425,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         StatusMessage = $"当前项目：{project.Name}";
+        await RefreshOperationHistoryAsync();
     }
 
     private async Task<ProjectId?> EnsureProjectAsync()
@@ -1274,6 +1520,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_currentProjectId is null || _currentSessionId is null)
         {
             MissingCutsSummary = string.Empty;
+            FrameSequenceSummary = string.Empty;
             return;
         }
 
@@ -1315,6 +1562,61 @@ public partial class MainWindowViewModel : ViewModelBase
         MissingCutsSummary = string.Join("；", parts);
     }
 
+    private async Task LoadFrameSequenceAnalysisAsync(bool showFailureAsStatus = false)
+    {
+        if (_currentProjectId is null || _currentSessionId is null)
+        {
+            FrameSequenceSummary = string.Empty;
+            return;
+        }
+
+        var result = await _analyzeFrameSequencesHandler.HandleAsync(
+            new AnalyzeFrameSequencesFromSessionQuery(_currentProjectId.Value, _currentSessionId.Value));
+
+        if (result.IsFailure || result.Value is null)
+        {
+            FrameSequenceSummary = showFailureAsStatus
+                ? result.Error ?? "帧序列检测失败。"
+                : string.Empty;
+            return;
+        }
+
+        var analysis = result.Value;
+        var issueCount = analysis.MissingFrames.Count
+            + analysis.DuplicateFrames.Count
+            + analysis.CrossCutFrames.Count
+            + analysis.OrphanFrames.Count;
+
+        if (issueCount == 0)
+        {
+            FrameSequenceSummary = $"已分析 {analysis.ParsedFileCount} 个帧文件，未发现问题。";
+            return;
+        }
+
+        var parts = new List<string>();
+        if (analysis.MissingFrames.Count > 0)
+        {
+            parts.Add($"缺帧 {analysis.MissingFrames.Count}");
+        }
+
+        if (analysis.DuplicateFrames.Count > 0)
+        {
+            parts.Add($"重复帧 {analysis.DuplicateFrames.Count}");
+        }
+
+        if (analysis.CrossCutFrames.Count > 0)
+        {
+            parts.Add($"跨卡帧 {analysis.CrossCutFrames.Count}");
+        }
+
+        if (analysis.OrphanFrames.Count > 0)
+        {
+            parts.Add($"孤立帧 {analysis.OrphanFrames.Count}");
+        }
+
+        FrameSequenceSummary = $"已分析 {analysis.ParsedFileCount} 个帧文件；{string.Join("，", parts)}。";
+    }
+
     private static int? ResolveMissingCutScope(int value) => value > 0 ? value : null;
 
     private bool CanPickFolder() => !IsBusy;
@@ -1337,9 +1639,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanExportMissingCuts() => !IsBusy && _currentSessionId is not null;
 
+    private bool CanDetectFrameSequences() => !IsBusy && _currentSessionId is not null;
+
+    private bool CanExportFrameSequences() => !IsBusy && _currentSessionId is not null;
+
     private bool CanDeleteProject() => !IsBusy && _currentProjectId is not null;
 
-    private bool CanUndo() => !IsBusy && _currentProjectId is not null;
+    private bool CanUndo() => !IsBusy && UndoableCount > 0;
 
     private bool CanInsertCut() => !IsBusy && _currentSessionId is not null && InsertAfterCut > 0;
 
@@ -1365,6 +1671,8 @@ public partial class MainWindowViewModel : ViewModelBase
         MoveToArchiveCommand.NotifyCanExecuteChanged();
         DetectMissingCutsCommand.NotifyCanExecuteChanged();
         ExportMissingCutsCommand.NotifyCanExecuteChanged();
+        DetectFrameSequencesCommand.NotifyCanExecuteChanged();
+        ExportFrameSequencesCommand.NotifyCanExecuteChanged();
         DeleteProjectCommand.NotifyCanExecuteChanged();
         InsertCutCommand.NotifyCanExecuteChanged();
         BatchAutoNumberCommand.NotifyCanExecuteChanged();

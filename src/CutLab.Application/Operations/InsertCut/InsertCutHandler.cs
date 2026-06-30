@@ -16,7 +16,8 @@ public sealed record InsertCutCommand(
     int AfterCut,
     AssetType AssetType,
     bool UnrecognizedOnly,
-    bool DryRun);
+    bool DryRun,
+    ConflictResolutionStrategy ConflictStrategy = ConflictResolutionStrategy.Fail);
 
 public sealed record InsertCutResult(
     bool DryRun,
@@ -57,6 +58,7 @@ public sealed partial class InsertCutHandler
 
     public async Task<Result<InsertCutResult>> HandleAsync(
         InsertCutCommand command,
+        IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var project = await _projectRepository.GetByIdAsync(command.ProjectId, cancellationToken);
@@ -125,7 +127,7 @@ public sealed partial class InsertCutHandler
         await _registryRepository.SaveAsync(registry, cancellationToken);
 
         var versionTag = project.DefaultVersionTag;
-        var items = BuildRenameItems(session, project, insertCut, command, versionTag);
+        var items = BuildRenameItems(session, project, insertCut, command, versionTag, command.ConflictStrategy);
         var readyItems = items.Where(item => item.Status == RenamePlanStatus.Ready).ToList();
 
         if (command.DryRun)
@@ -151,7 +153,7 @@ public sealed partial class InsertCutHandler
             batch.AddEntry(OperationKind.Rename, item.SourcePath, item.TargetPath);
         }
 
-        await _fileSystemGateway.ApplyOperationsAsync(batch, progress: null, cancellationToken);
+        await _fileSystemGateway.ApplyOperationsAsync(batch, progress, cancellationToken);
 
         var completeResult = batch.Complete();
         if (completeResult.IsFailure)
@@ -181,7 +183,8 @@ public sealed partial class InsertCutHandler
         AnimationProject project,
         CutNumber insertCut,
         InsertCutCommand command,
-        VersionTag? versionTag)
+        VersionTag? versionTag,
+        ConflictResolutionStrategy conflictStrategy)
     {
         var items = new List<RenamePlanItem>();
         var targetPaths = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -239,26 +242,20 @@ public sealed partial class InsertCutHandler
                 continue;
             }
 
-            if (targetPaths.ContainsKey(targetFullPath) || File.Exists(targetFullPath))
-            {
-                items.Add(new RenamePlanItem(
-                    asset.Id,
-                    asset.OriginalPath,
-                    targetPath,
-                    naming.Value,
-                    RenamePlanStatus.Conflict,
-                    "目标文件名冲突。"));
-                continue;
-            }
+            var resolution = TargetPathConflictResolver.ResolveRename(
+                targetFullPath,
+                naming.Value,
+                asset.Id,
+                targetPaths,
+                conflictStrategy);
 
-            targetPaths[targetFullPath] = asset.Id;
             items.Add(new RenamePlanItem(
                 asset.Id,
                 asset.OriginalPath,
-                targetPath,
-                naming.Value,
-                RenamePlanStatus.Ready,
-                null));
+                resolution.TargetPath,
+                resolution.ProposedFileName,
+                resolution.Status,
+                resolution.Message));
         }
 
         return items;

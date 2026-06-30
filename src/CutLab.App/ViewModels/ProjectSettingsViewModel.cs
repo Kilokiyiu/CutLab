@@ -2,6 +2,7 @@ namespace CutLab.App.ViewModels;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CutLab.Application.Common;
 using CutLab.Application.Projects.GetProject;
 using CutLab.Application.Projects.Templates;
 using CutLab.Application.Projects.UpdateProjectSettings;
@@ -41,6 +42,9 @@ public partial class ProjectSettingsViewModel : ViewModelBase
     private string _namingTemplate = "EP{EP:02}_S{SC:02}_C{CUT:03}_{TYPE}";
 
     [ObservableProperty]
+    private string _namingSeparator = "_";
+
+    [ObservableProperty]
     private string _archivePathPattern = "EP{EP:02}/S{SC:02}/C{CUT:03}/{TYPE}";
 
     [ObservableProperty]
@@ -54,6 +58,21 @@ public partial class ProjectSettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _recognitionPatternsText = string.Empty;
+
+    [ObservableProperty]
+    private string _typeSuffixesText = "分镜, 原画, 动画, 背景, 渲染";
+
+    [ObservableProperty]
+    private bool _frameSequenceEnabled;
+
+    [ObservableProperty]
+    private string _frameSequencePattern = "C{CUT:03}_{FRAME:03}";
+
+    [ObservableProperty]
+    private int _frameSequenceMinFrame = 1;
+
+    [ObservableProperty]
+    private int _frameSequenceMaxFrame = 99;
 
     [ObservableProperty]
     private string _errorMessage = string.Empty;
@@ -71,11 +90,17 @@ public partial class ProjectSettingsViewModel : ViewModelBase
         Name = result.Value.Name;
         Episode = result.Value.Episode;
         NamingTemplate = result.Value.NamingTemplate;
+        NamingSeparator = result.Value.NamingSeparator;
         ArchivePathPattern = result.Value.ArchivePathPattern;
         ArchiveFoldersText = result.Value.ArchiveFoldersText;
         RootPath = result.Value.RootPath;
         DefaultVersionTag = result.Value.DefaultVersionTag;
         RecognitionPatternsText = result.Value.RecognitionPatternsText;
+        TypeSuffixesText = result.Value.TypeSuffixesText;
+        FrameSequenceEnabled = result.Value.FrameSequenceEnabled;
+        FrameSequencePattern = result.Value.FrameSequencePattern;
+        FrameSequenceMinFrame = result.Value.FrameSequenceMinFrame;
+        FrameSequenceMaxFrame = result.Value.FrameSequenceMaxFrame;
         ErrorMessage = string.Empty;
         return true;
     }
@@ -99,6 +124,7 @@ public partial class ProjectSettingsViewModel : ViewModelBase
         NamingTemplate = template.NamingTemplate;
         ArchivePathPattern = template.ArchivePathPattern;
         ArchiveFoldersText = string.Join(", ", template.ArchiveFolders);
+        TypeSuffixesText = TypeSuffixesParser.Format(template.TypeSuffixes);
         RecognitionPatternsText = string.Join(Environment.NewLine, template.RecognitionPatterns);
         ErrorMessage = string.Empty;
     }
@@ -112,11 +138,17 @@ public partial class ProjectSettingsViewModel : ViewModelBase
             Name,
             Episode,
             NamingTemplate,
+            NamingSeparator,
             ArchivePathPattern,
             ArchiveFoldersText,
             RootPath,
             DefaultVersionTag,
-            RecognitionPatternsText));
+            RecognitionPatternsText,
+            TypeSuffixesText,
+            FrameSequenceEnabled,
+            FrameSequencePattern,
+            FrameSequenceMinFrame,
+            FrameSequenceMaxFrame));
 
         if (result.IsFailure)
         {

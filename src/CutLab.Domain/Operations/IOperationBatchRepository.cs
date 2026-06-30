@@ -9,4 +9,9 @@ public interface IOperationBatchRepository
     Task<OperationBatch?> GetLastAppliedAsync(
         ProjectId projectId,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OperationBatch>> ListRecentAsync(
+        ProjectId projectId,
+        int limit = 20,
+        CancellationToken cancellationToken = default);
 }

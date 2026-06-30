@@ -11,11 +11,17 @@ public sealed record UpdateProjectSettingsCommand(
     string Name,
     int Episode,
     string NamingTemplate,
+    string NamingSeparator,
     string ArchivePathPattern,
     string ArchiveFoldersText,
     string RootPath,
     string DefaultVersionTag,
-    string RecognitionPatternsText);
+    string RecognitionPatternsText,
+    string TypeSuffixesText,
+    bool FrameSequenceEnabled,
+    string FrameSequencePattern,
+    int FrameSequenceMinFrame,
+    int FrameSequenceMaxFrame);
 
 public sealed class UpdateProjectSettingsHandler
 {
@@ -40,8 +46,8 @@ public sealed class UpdateProjectSettingsHandler
 
         var naming = NamingConvention.Create(
             command.NamingTemplate,
-            "_",
-            DefaultTypeSuffixes());
+            string.IsNullOrWhiteSpace(command.NamingSeparator) ? "_" : command.NamingSeparator,
+            TypeSuffixesParser.Parse(command.TypeSuffixesText));
         if (naming.IsFailure || naming.Value is null)
         {
             return Result.Failure(naming.Error ?? "命名规则无效。");
@@ -77,6 +83,18 @@ public sealed class UpdateProjectSettingsHandler
 
         project.UpdateRecognitionPatterns(RecognitionPatternParser.Parse(command.RecognitionPatternsText));
 
+        var frameSettings = FrameSequenceSettings.Create(
+            command.FrameSequenceEnabled,
+            command.FrameSequencePattern,
+            command.FrameSequenceMinFrame,
+            command.FrameSequenceMaxFrame);
+        if (frameSettings.IsFailure || frameSettings.Value is null)
+        {
+            return Result.Failure(frameSettings.Error ?? "帧序列设置无效。");
+        }
+
+        project.UpdateFrameSequenceSettings(frameSettings.Value);
+
         await _repository.SaveAsync(project, cancellationToken);
         await _unitOfWork.CommitAsync(cancellationToken);
         return Result.Success();
@@ -84,14 +102,4 @@ public sealed class UpdateProjectSettingsHandler
 
     private static IReadOnlyList<string> ParseFolders(string text) =>
         text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-
-    private static IReadOnlyDictionary<AssetType, string> DefaultTypeSuffixes() =>
-        new Dictionary<AssetType, string>
-        {
-            [AssetType.Storyboard] = "分镜",
-            [AssetType.Keyframe] = "原画",
-            [AssetType.Inbetween] = "动画",
-            [AssetType.Background] = "背景",
-            [AssetType.Render] = "渲染"
-        };
 }

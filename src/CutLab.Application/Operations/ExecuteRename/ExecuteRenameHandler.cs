@@ -8,7 +8,11 @@ using CutLab.Domain.Projects;
 using CutLab.Domain.Scanning;
 using CutLab.Domain.ValueObjects;
 
-public sealed record ExecuteRenameCommand(ProjectId ProjectId, Guid SessionId, bool DryRun);
+public sealed record ExecuteRenameCommand(
+    ProjectId ProjectId,
+    Guid SessionId,
+    bool DryRun,
+    ConflictResolutionStrategy ConflictStrategy = ConflictResolutionStrategy.Fail);
 
 public sealed record ExecuteRenameResult(
     bool DryRun,
@@ -42,6 +46,7 @@ public sealed class ExecuteRenameHandler
 
     public async Task<Result<ExecuteRenameResult>> HandleAsync(
         ExecuteRenameCommand command,
+        IProgress<OperationProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var project = await _projectRepository.GetByIdAsync(command.ProjectId, cancellationToken);
@@ -61,7 +66,7 @@ public sealed class ExecuteRenameHandler
             return Result.Failure<ExecuteRenameResult>("扫描会话与项目不匹配。");
         }
 
-        var items = RenamePlanBuilder.Build(session);
+        var items = RenamePlanBuilder.Build(session, command.ConflictStrategy);
         var readyItems = items.Where(item => item.Status == RenamePlanStatus.Ready).ToList();
 
         if (command.DryRun)
@@ -86,7 +91,7 @@ public sealed class ExecuteRenameHandler
             batch.AddEntry(OperationKind.Rename, item.SourcePath, item.TargetPath);
         }
 
-        await _fileSystemGateway.ApplyOperationsAsync(batch, progress: null, cancellationToken);
+        await _fileSystemGateway.ApplyOperationsAsync(batch, progress, cancellationToken);
 
         var completeResult = batch.Complete();
         if (completeResult.IsFailure)

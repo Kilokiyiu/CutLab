@@ -51,6 +51,20 @@ internal sealed class InMemoryOperationBatchRepository : IOperationBatchReposito
 
         return Task.FromResult(batch);
     }
+
+    public Task<IReadOnlyList<OperationBatch>> ListRecentAsync(
+        ProjectId projectId,
+        int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var batches = _batches
+            .Where(b => b.ProjectId == projectId && b.AppliedAt is not null)
+            .OrderByDescending(b => b.AppliedAt)
+            .Take(limit)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<OperationBatch>>(batches);
+    }
 }
 
 internal sealed class JsonUnitOfWork : Application.Common.Interfaces.IUnitOfWork

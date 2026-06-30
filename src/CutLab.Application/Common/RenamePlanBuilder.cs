@@ -21,7 +21,9 @@ public enum RenamePlanStatus
 
 public static class RenamePlanBuilder
 {
-    public static IReadOnlyList<RenamePlanItem> Build(ScanSession session)
+    public static IReadOnlyList<RenamePlanItem> Build(
+        ScanSession session,
+        ConflictResolutionStrategy conflictStrategy = ConflictResolutionStrategy.Fail)
     {
         var items = new List<RenamePlanItem>();
         var targetPaths = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -53,38 +55,20 @@ public static class RenamePlanBuilder
                 continue;
             }
 
-            if (targetPaths.TryGetValue(targetFullPath, out var existingAssetId))
-            {
-                items.Add(new RenamePlanItem(
-                    asset.Id,
-                    asset.OriginalPath,
-                    targetPath,
-                    asset.ProposedFileName.Value,
-                    RenamePlanStatus.Conflict,
-                    $"与另一文件目标名冲突（{existingAssetId}）。"));
-                continue;
-            }
+            var resolution = TargetPathConflictResolver.ResolveRename(
+                targetFullPath,
+                asset.ProposedFileName.Value,
+                asset.Id,
+                targetPaths,
+                conflictStrategy);
 
-            if (File.Exists(targetFullPath))
-            {
-                items.Add(new RenamePlanItem(
-                    asset.Id,
-                    asset.OriginalPath,
-                    targetPath,
-                    asset.ProposedFileName.Value,
-                    RenamePlanStatus.Conflict,
-                    "目标文件已存在。"));
-                continue;
-            }
-
-            targetPaths[targetFullPath] = asset.Id;
             items.Add(new RenamePlanItem(
                 asset.Id,
                 asset.OriginalPath,
-                targetPath,
-                asset.ProposedFileName.Value,
-                RenamePlanStatus.Ready,
-                null));
+                resolution.TargetPath,
+                resolution.ProposedFileName,
+                resolution.Status,
+                resolution.Message));
         }
 
         return items;

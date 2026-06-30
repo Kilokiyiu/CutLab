@@ -39,6 +39,7 @@ sealed class Program
         services.AddSingleton<IWindowService, WindowService>();
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<ProjectSettingsViewModel>();
+        services.AddTransient<NewProjectViewModel>();
         return services.BuildServiceProvider();
     }
 }

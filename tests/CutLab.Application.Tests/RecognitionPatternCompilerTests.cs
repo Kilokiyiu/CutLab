@@ -52,17 +52,24 @@ public class CustomRecognitionPatternTests
     }
 
     [Fact]
-    public void TryParse_ShouldUseCustomPatternWhenBuiltinDoesNotMatch()
+    public void TryParse_ShouldUseCustomTypeSuffixesFromConvention()
     {
-        var patterns = new List<RecognitionPattern>
-        {
-            new("镜头{N}_{TYPE}")
-        };
+        var convention = NamingConvention.Create(
+            "C{CUT:03}_{TYPE}",
+            "_",
+            new Dictionary<AssetType, string>
+            {
+                [AssetType.Storyboard] = "分镜",
+                [AssetType.Keyframe] = "原画稿",
+                [AssetType.Inbetween] = "动画",
+                [AssetType.Background] = "背景",
+                [AssetType.Render] = "渲染"
+            }).Value!;
 
-        var result = _service.TryParse("镜头12_渲染.png", patterns, _convention);
+        var result = _service.TryParse("C003_原画稿.png", [], convention);
 
         Assert.Equal(RecognitionStatus.Recognized, result.Status);
-        Assert.Equal(12, result.CutNumber!.Value.Cut);
-        Assert.Equal(AssetType.Render, result.AssetType);
+        Assert.Equal(3, result.CutNumber!.Value.Cut);
+        Assert.Equal(AssetType.Keyframe, result.AssetType);
     }
 }
